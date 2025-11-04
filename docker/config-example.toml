@@ -19,7 +19,7 @@ minimum_difficulty = 1
 #
 # This address receives payouts if a block is found in the first 10
 # seconds
-bootstrap_address = "tb1qyazxde6558qj6z3d9np5e6msmrspwpf6k0qggk"
+bootstrap_address = "bc1qypskemx80lznv4tjpnmpw9c5pgpy32fpkk3sw2"
 
 # Optional: Donation to developers (in basis points, 100 = 1%)
 # donation_address = "<your donation address here>"
@@ -35,7 +35,7 @@ bootstrap_address = "tb1qyazxde6558qj6z3d9np5e6msmrspwpf6k0qggk"
 zmqpubhashblock = "tcp://host.docker.internal:28334"
 
 # REQUIRED: Set your network ("main", "testnet4", or "signet")
-network = "signet"
+network = "main"
 
 version_mask = "1fffe000"
 
@@ -50,7 +50,7 @@ pool_signature = "hydrapool"
 [bitcoinrpc]
 # REQUIRED: Bitcoin RPC connection
 # For Docker: use "http://host.docker.internal:38332" to connect to host
-url = "http://host.docker.internal:38332"
+url = "http://host.docker.internal:8332"
 username = "hydrapool"
 password = "hydrapool"
 
