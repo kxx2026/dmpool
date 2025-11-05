@@ -6,7 +6,7 @@ Pool with support for solo mining and PPLNS accounting.
 We have an instance mining on mainnet at
 [test.hydrapool.org](https://test.hydrapool.org). But we hope you'll
 run a pool for yourself. See below on [how to run your own instance](#run). We
-only accomodate up to 20 users atm for coinbase and block weight
+only accomodate up to 100 users atm for coinbase and block weight
 reasons, workers are limited by your hardware.
 
 ## Features
@@ -22,7 +22,7 @@ reasons, workers are limited by your hardware.
 4. Use any bitcoin node that supports bitcoin RPC.
 5. Implemented in Rust, for ease of extending the pool with novel
    accounting and payout schemes.
-6. Open source with GPlv3. Feel free to extend and/or make changes.
+6. Open source with AGPLv3. Feel free to extend and/or make changes.
 
 <a id="run"></a>
 # Running Your Own Hydrapool Instance
