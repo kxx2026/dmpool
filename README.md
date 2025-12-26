@@ -193,7 +193,11 @@ docker compose run --rm hydrapool-cli gen-auth <USERNAME> <PASSWORD>
 The above will generate config lines for pasting into your
 config.toml.
 
-Once the auth_user and auth_token have been updated in the config.toml file, you need to update the username and password in both the prometheus.yml file and the docker-compose.yml file so that those credentials match the username and password you passed to the gen-auth function.
+Once the auth_user and auth_token have been updated in the config.toml
+file, you need to update the username and password in both the
+prometheus.yml file and the docker-compose.yml file so that those
+credentials match the username and password you passed to the gen-auth
+function.
 
 To update prometheus with your new credentials:
 
@@ -224,7 +228,9 @@ nano docker-compose.yml
 sudo docker compose up -d
 ```
 
-Note: By default, prometheus uses the built-in configuration with credentials `hydrapool/hydrapool`. Creating a custom `hydrapool/prometheus.yml` file overrides this default configuration.
+Note: By default, prometheus uses the built-in configuration with
+credentials `hydrapool/hydrapool`. Creating a custom
+`hydrapool/prometheus.yml` file overrides this default configuration.
 
 <a id="api"></a>
 # API Server
