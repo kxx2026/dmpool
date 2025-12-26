@@ -7,21 +7,33 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.hydrapool
     image: hydrapool:dev
+    networks:
+      - p2pool_network
 
   hydrapool-cli:
     build:
       context: ..
       dockerfile: docker/Dockerfile.hydrapool
     image: hydrapool:dev
+    networks:
+      - p2pool_network
 
   prometheus:
     build:
       context: ..
       dockerfile: docker/Dockerfile.prometheus
     image: hydrapool-prometheus:dev
+    networks:
+      - p2pool_network
 
   grafana:
     build:
       context: ..
       dockerfile: docker/Dockerfile.grafana
     image: hydrapool-grafana:dev
+    networks:
+      - p2pool_network
+
+networks:
+  p2pool_network:
+    driver: bridge
