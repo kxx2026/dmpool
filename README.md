@@ -90,6 +90,21 @@ monitoring dashboard on port 3000. If you are running on localhost,
 `stratum://localhost:3333` and dashboard at
 `http://localhost::3000`.
 
+# Upgrading
+
+If you already have hydrapool running, use the following to pull the
+latest images and restart with minimal downtime.
+
+```bash
+cd <directory where your docker-compose.yml file is>
+
+# Pull latest images while services are still running
+docker compose pull
+
+# Recreate containers with new images
+docker compose up -d --force-recreate
+```
+
 # Dashboards
 
 ## Pool Dashboard

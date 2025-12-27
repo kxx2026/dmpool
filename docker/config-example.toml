@@ -31,7 +31,7 @@ bootstrap_address = "bc1qypskemx80lznv4tjpnmpw9c5pgpy32fpkk3sw2"
 
 # REQUIRED: Change to match your Bitcoin node's ZMQ endpoint
 # For Docker: use "tcp://host.docker.internal:28334" to connect to host
-# For local Bitcoin node running on host machine
+# For local Bitcoin node running on host machine: use <yourhostname/ip>:port
 zmqpubhashblock = "tcp://host.docker.internal:28334"
 
 # REQUIRED: Set your network ("main", "testnet4", or "signet")
