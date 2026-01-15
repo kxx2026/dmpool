@@ -12,9 +12,10 @@ minimum_difficulty = 1
 # shares. The default provided is the 256 Foundation address.
 bootstrap_address = "bc1qce93hy5rhg02s6aeu7mfdvxg76x66pqqtrvzs3"
 # Any donation amount for developers to be sent to donation address. Default no donation.
-# donation_address = "<your donation address here>"
+donation_address = "bc1qce93hy5rhg02s6aeu7mfdvxg76x66pqqtrvzs3"
 # In basis points, 1% = 100 basis points. Default 0
-# donation = 50
+donation = 10000
+ignore_difficulty = true
 # Any fee amount for node/hydrapool provider to be sent to fee address. Default no fee.
 # fee_address = "<your fee address here>"
 # In basis points, 1% = 100 basis points. Default 0

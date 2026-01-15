@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.5] - 2026-01-16
+
+### Fixed
+
+- Skip PPLNS accounting if donation is at 100%. That enables non
+  addresses as usernames and we avoid any parsing issues with
+  btcaddresses when we allow random usernames.
+- Bump p2poolv2 libs to v0.4.5
+
 ## [2.1.4] - 2026-01-15
 
 ### Fixed
