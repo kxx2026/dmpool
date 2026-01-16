@@ -487,7 +487,7 @@ dependencies = [
 [[package]]
 name = "bitcoindrpc"
 version = "0.1.0"
-source = "git+https://github.com/p2poolv2/p2poolv2?tag=hydrapool.v0.4.7#5c29caecb8f5fc2d8634eaa88981e39c4a5e92db"
+source = "git+https://github.com/p2poolv2/p2poolv2?branch=telehash-prep#55c43c6287c2b2ffa5b535b75fe8b3f0acd5b93b"
 dependencies = [
  "base64 0.22.1",
  "bitcoin",
@@ -3020,7 +3020,7 @@ checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 [[package]]
 name = "p2poolv2_api"
 version = "0.1.0"
-source = "git+https://github.com/p2poolv2/p2poolv2?tag=hydrapool.v0.4.7#5c29caecb8f5fc2d8634eaa88981e39c4a5e92db"
+source = "git+https://github.com/p2poolv2/p2poolv2?branch=telehash-prep#55c43c6287c2b2ffa5b535b75fe8b3f0acd5b93b"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -3040,7 +3040,7 @@ dependencies = [
 [[package]]
 name = "p2poolv2_cli"
 version = "0.1.0"
-source = "git+https://github.com/p2poolv2/p2poolv2?tag=hydrapool.v0.4.7#5c29caecb8f5fc2d8634eaa88981e39c4a5e92db"
+source = "git+https://github.com/p2poolv2/p2poolv2?branch=telehash-prep#55c43c6287c2b2ffa5b535b75fe8b3f0acd5b93b"
 dependencies = [
  "base64 0.22.1",
  "clap",
@@ -3060,7 +3060,7 @@ dependencies = [
 [[package]]
 name = "p2poolv2_lib"
 version = "0.1.0"
-source = "git+https://github.com/p2poolv2/p2poolv2?tag=hydrapool.v0.4.7#5c29caecb8f5fc2d8634eaa88981e39c4a5e92db"
+source = "git+https://github.com/p2poolv2/p2poolv2?branch=telehash-prep#55c43c6287c2b2ffa5b535b75fe8b3f0acd5b93b"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
