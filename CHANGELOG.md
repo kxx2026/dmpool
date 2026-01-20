@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-01-20
+
+### Changed
+
+- Optimisations for reducing system load
+- Bump p2poolv2 to v0.6.0
+
+
 ## [2.2.2] - 2026-01-19
 
 ### Changed
