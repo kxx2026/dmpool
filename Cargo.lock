@@ -1079,6 +1079,7 @@ name = "dmpool"
 version = "2.4.0"
 dependencies = [
  "anyhow",
+ "axum",
  "bitcoin",
  "bitcoindrpc",
  "clap",
@@ -1086,6 +1087,7 @@ dependencies = [
  "p2poolv2_cli",
  "p2poolv2_lib",
  "reqwest",
+ "serde",
  "serde_json",
  "tokio",
  "tokio-test",
