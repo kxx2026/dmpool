@@ -36,6 +36,7 @@ use std::time::Duration;
 use tokio::sync::oneshot;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
 
 /// Interval in seconds to poll for new block templates since the last zmq signal
 const GBT_POLL_INTERVAL: u64 = 10; // seconds
@@ -55,18 +56,31 @@ const NOTIFY_CHANNEL_CAPACITY: usize = 1000;
 /// Returns when any shutdown signal is received.
 #[cfg(unix)]
 async fn wait_for_shutdown_signal(stopping_rx: oneshot::Receiver<()>) {
-    let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-        .expect("Failed to set up SIGTERM handler");
-
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            info!("Received Ctrl+C, initiating graceful shutdown...");
+    match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+        Ok(mut sigterm) => {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    info!("Received Ctrl+C, initiating graceful shutdown...");
+                }
+                _ = sigterm.recv() => {
+                    info!("Received SIGTERM, initiating graceful shutdown...");
+                }
+                _ = stopping_rx => {
+                    info!("Node stopping due to internal signal...");
+                }
+            }
         }
-        _ = sigterm.recv() => {
-            info!("Received SIGTERM, initiating graceful shutdown...");
-        }
-        _ = stopping_rx => {
-            info!("Node stopping due to internal signal...");
+        Err(e) => {
+            // If we cannot set up signal handler, at least wait for Ctrl+C and internal signal
+            warn!("Failed to set up SIGTERM handler: {}. Only Ctrl+C will be monitored.", e);
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    info!("Received Ctrl+C, initiating graceful shutdown...");
+                }
+                _ = stopping_rx => {
+                    info!("Node stopping due to internal signal...");
+                }
+            }
         }
     }
 }
@@ -95,33 +109,43 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), String> {
     info!("Starting DMPool...");
+    
     // Parse command line arguments
     let args = Args::parse();
 
     // Load configuration
-    let config = Config::load(&args.config);
-    if config.is_err() {
-        let err = config.unwrap_err();
-        error!("Failed to load config: {err}");
-        return Err(format!("Failed to load config: {err}"));
-    }
-    let config = config.unwrap();
+    let config = match Config::load(&args.config) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            error!("Failed to load config from {}: {}", args.config, e);
+            return Err(format!("Failed to load config: {}", e));
+        }
+    };
+
     // Configure logging based on config
-    let logging_result = setup_logging(&config.logging);
-    // hold guard to ensure logging is set up correctly
-    let _guard = match logging_result {
+    let _guard = match setup_logging(&config.logging) {
         Ok(guard) => {
             info!("Logging set up successfully");
             guard
         }
         Err(e) => {
-            error!("Failed to set up logging: {e}");
-            return Err(format!("Failed to set up logging: {e}"));
+            // Logging setup failed, but we can continue with stderr output
+            eprintln!("Failed to set up logging: {}. Continuing with stderr output.", e);
+            return Err(format!("Failed to set up logging: {}", e));
         }
     };
 
     let genesis = ShareBlock::build_genesis_for_network(config.stratum.network);
-    let store = Arc::new(Store::new(config.store.path.clone(), false).unwrap());
+    
+    // Initialize store with proper error handling
+    let store = match Store::new(config.store.path.clone(), false) {
+        Ok(s) => Arc::new(s),
+        Err(e) => {
+            error!("Failed to initialize database at {}: {}", config.store.path, e);
+            return Err(format!("Database initialization failed: {}", e));
+        }
+    };
+    
     let chain_store = Arc::new(ChainStore::new(
         store.clone(),
         genesis,
@@ -139,7 +163,14 @@ async fn main() -> Result<(), String> {
         Duration::from_secs(config.store.pplns_ttl_days * 3600 * 24),
     );
 
-    let stratum_config = config.stratum.clone().parse().unwrap();
+    // Parse stratum config with proper error handling
+    let stratum_config = match config.stratum.clone().parse() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            error!("Failed to parse stratum configuration: {}", e);
+            return Err(format!("Invalid stratum configuration: {}", e));
+        }
+    };
     let bitcoinrpc_config = config.bitcoinrpc.clone();
 
     let (stratum_shutdown_tx, stratum_shutdown_rx) = tokio::sync::oneshot::channel();
@@ -148,12 +179,13 @@ async fn main() -> Result<(), String> {
 
     let notify_tx_for_gbt = notify_tx.clone();
     let bitcoinrpc_config_cloned = bitcoinrpc_config.clone();
+    
     // Setup ZMQ publisher for block notifications
     let zmq_trigger_rx = match ZmqListener.start(&stratum_config.zmqpubhashblock) {
         Ok(rx) => rx,
         Err(e) => {
-            error!("Failed to set up ZMQ publisher: {e}");
-            return Err("Failed to set up ZMQ publisher".into());
+            error!("Failed to set up ZMQ publisher: {}", e);
+            return Err(format!("Failed to set up ZMQ publisher: {}", e));
         }
     };
 
@@ -167,7 +199,7 @@ async fn main() -> Result<(), String> {
         )
         .await
         {
-            tracing::error!("Failed to fetch block template. Shutting down. \n {e}");
+            tracing::error!("Failed to fetch block template. Shutting down. \n {}", e);
             exit(1);
         }
     });
@@ -181,7 +213,6 @@ async fn main() -> Result<(), String> {
     let cloned_stratum_config = stratum_config.clone();
     tokio::spawn(async move {
         info!("Starting Stratum notifier...");
-        // This will run indefinitely, sending new block templates to the Stratum server as they arrive
         start_notify(
             notify_rx,
             connections_cloned,
@@ -199,7 +230,7 @@ async fn main() -> Result<(), String> {
     let metrics_handle = match metrics::start_metrics(config.logging.stats_dir.clone()).await {
         Ok(handle) => handle,
         Err(e) => {
-            return Err(format!("Failed to start metrics: {e}"));
+            return Err(format!("Failed to start metrics: {}", e));
         }
     };
     let metrics_cloned = metrics_handle.clone();
@@ -208,26 +239,35 @@ async fn main() -> Result<(), String> {
     let store_for_stratum = chain_store.clone();
     let tracker_handle_cloned = tracker_handle.clone();
 
+    // Build and start stratum server with proper error handling
+    let stratum_server_result = StratumServerBuilder::default()
+        .shutdown_rx(stratum_shutdown_rx)
+        .connections_handle(connections_handle.clone())
+        .emissions_tx(emissions_tx)
+        .hostname(stratum_config.hostname)
+        .port(stratum_config.port)
+        .start_difficulty(stratum_config.start_difficulty)
+        .minimum_difficulty(stratum_config.minimum_difficulty)
+        .maximum_difficulty(stratum_config.maximum_difficulty)
+        .ignore_difficulty(stratum_config.ignore_difficulty)
+        .validate_addresses(Some(
+            stratum_config.donation.unwrap_or_default() != FULL_DONATION_BIPS,
+        ))
+        .network(stratum_config.network)
+        .version_mask(stratum_config.version_mask)
+        .store(store_for_stratum)
+        .build()
+        .await;
+
+    let mut stratum_server = match stratum_server_result {
+        Ok(server) => server,
+        Err(e) => {
+            error!("Failed to build Stratum server: {}", e);
+            return Err(format!("Failed to build Stratum server: {}", e));
+        }
+    };
+
     tokio::spawn(async move {
-        let mut stratum_server = StratumServerBuilder::default()
-            .shutdown_rx(stratum_shutdown_rx)
-            .connections_handle(connections_handle.clone())
-            .emissions_tx(emissions_tx)
-            .hostname(stratum_config.hostname)
-            .port(stratum_config.port)
-            .start_difficulty(stratum_config.start_difficulty)
-            .minimum_difficulty(stratum_config.minimum_difficulty)
-            .maximum_difficulty(stratum_config.maximum_difficulty)
-            .ignore_difficulty(stratum_config.ignore_difficulty)
-            .validate_addresses(Some(
-                stratum_config.donation.unwrap_or_default() != FULL_DONATION_BIPS,
-            )) // 100% donation in bips, skip address validation
-            .network(stratum_config.network)
-            .version_mask(stratum_config.version_mask)
-            .store(store_for_stratum)
-            .build()
-            .await
-            .unwrap();
         info!("Starting Stratum server...");
         let result = stratum_server
             .start(
@@ -238,8 +278,8 @@ async fn main() -> Result<(), String> {
                 metrics_cloned,
             )
             .await;
-        if result.is_err() {
-            error!("Failed to start Stratum server: {}", result.unwrap_err());
+        if let Err(e) = result {
+            error!("Stratum server error: {}", e);
         }
         info!("Stratum server stopped");
     });
@@ -256,8 +296,8 @@ async fn main() -> Result<(), String> {
     {
         Ok(shutdown_tx) => shutdown_tx,
         Err(e) => {
-            info!("Error starting server: {}", e);
-            return Err("Failed to start API Server. Quitting.".into());
+            info!("Error starting API server: {}", e);
+            return Err(format!("Failed to start API Server: {}", e));
         }
     };
     info!(
@@ -275,7 +315,7 @@ async fn main() -> Result<(), String> {
 
             // Shutdown node first to stop accepting new work
             if let Err(e) = node_handle.shutdown().await {
-                error!("Error during node shutdown: {e}");
+                error!("Error during node shutdown: {}", e);
             }
 
             // Save metrics before shutdown to prevent data loss
@@ -284,24 +324,25 @@ async fn main() -> Result<(), String> {
                 &metrics,
                 &stats_dir_for_shutdown,
             ) {
-                error!("Failed to save metrics on shutdown: {e}");
+                error!("Failed to save metrics on shutdown: {}", e);
             } else {
                 info!("Metrics saved on shutdown");
             }
 
-            stratum_shutdown_tx
-                .send(())
-                .expect("Failed to send shutdown signal to Stratum server");
+            // Send shutdown signals - log errors but dont panic
+            if let Err(_) = stratum_shutdown_tx.send(()) {
+                warn!("Failed to send shutdown signal to Stratum server (may already be shut down)");
+            }
 
-            api_shutdown_tx
-                .send(())
-                .expect("Failed to send shutdown signal to API server");
+            if let Err(_) = api_shutdown_tx.send(()) {
+                warn!("Failed to send shutdown signal to API server (may already be shut down)");
+            }
 
             info!("Node stopped");
         }
         Err(e) => {
-            error!("Failed to start node: {e}");
-            return Err(format!("Failed to start node: {e}"));
+            error!("Failed to start node: {}", e);
+            return Err(format!("Failed to start node: {}", e));
         }
     }
     Ok(())

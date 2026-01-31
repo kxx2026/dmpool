@@ -11,7 +11,7 @@ homepage = "https://dmpool.org/"
 repository = "https://github.com/kxx2026/dmpool/"
 keywords = ["bitcoin", "mining", "pool", "p2p"]
 categories = ["cryptography::cryptocurrencies"]
-exclude=["tests"]
+# Tests enabled
 default-run = "dmpool"
 
 [profile.release]
@@ -35,6 +35,11 @@ p2poolv2_lib = { git = "https://github.com/p2poolv2/p2poolv2", package = "p2pool
 p2poolv2_cli = { git = "https://github.com/p2poolv2/p2poolv2", package = "p2poolv2_cli", tag = "v0.7.0" }
 p2poolv2_api = { git = "https://github.com/p2poolv2/p2poolv2", package = "p2poolv2_api", tag = "v0.7.0" }
 bitcoindrpc = { git = "https://github.com/p2poolv2/p2poolv2", package = "bitcoindrpc", tag = "v0.7.0" }
+[dev-dependencies]
+anyhow = "1.0"
+tokio-test = "0.4"
+reqwest = { version = "0.12", features = ["json"] }
+serde_json = "1.0"
 
 [[bin]]
 name = "dmpool"
