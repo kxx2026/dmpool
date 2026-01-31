@@ -2,13 +2,32 @@
 
 <div align="center">
 
-**DMPool** 是一个开源的比特币挖矿池软件，实现 PPLNS 收益分配，支持直接从 coinbase 支付。
+**DMPool** — 基于 Hydrapool 的衍生版本，用于定制化挖矿池运营。
 
 [![Rust](https://img.shields.io/badge/rust-1.88.0+-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-AGPLv3-blue.svg)](./LICENSE)
 [![GitHub](https://img.shields.io/badge/source-kxx2026%2Fdmpool-green.svg)](https://github.com/kxx2026/dmpool)
+[![Forked from](https://img.shields.io/badge/forked%20from-256--Foundation%2FHydra--Pool-informational.svg)](https://github.com/256-Foundation/Hydra-Pool)
 
 </div>
+
+## 关于此衍生项目
+
+**DMPool** 是基于 [Hydrapool](https://github.com/256-Foundation/Hydra-Pool) 的衍生作品，原项目由 [256 Foundation](https://github.com/256-Foundation) 开发。
+
+本分支在保持与原项目兼容的同时，针对特定挖矿池运营需求进行了定制。所有修改均按照原项目要求以相同的 **AGPLv3** 许可证发布。
+
+### 原始项目
+
+- **项目**: [Hydrapool](https://github.com/256-Foundation/Hydra-Pool)
+- **作者**: 256 Foundation (Kulpreet Singh)
+- **许可证**: AGPLv3
+
+### 本衍生项目
+
+- **仓库**: [kxx2026/dmpool](https://github.com/kxx2026/dmpool)
+- **衍生自**: 256-Foundation/Hydra-Pool
+- **许可证**: AGPLv3（继承自原项目）
 
 ## 简介
 
@@ -180,6 +199,16 @@ blockmaxweight=3930000
 
 本项目采用 **AGPLv3** 许可证 — 详见 [LICENSE](./LICENSE)
 
+这是基于 [256 Foundation](https://github.com/256-Foundation) 的 [Hydrapool](https://github.com/256-Foundation/Hydra-Pool) 的衍生作品，原项目使用 AGPLv3 许可证。本分支按照原项目要求保持相同的许可证。
+
+### AGPLv3 要点
+
+本许可证要求：
+- **源码可用性**: 如果您在服务器上运行本软件并向用户提供服务，必须向这些用户提供源代码
+- **相同方式共享**: 任何修改必须以相同的 AGPLv3 许可证发布
+- **署名**: 必须注明原作者（256 Foundation）
+- **修改说明**: 任何重大代码修改必须进行说明
+
 ## 贡献
 
 欢迎贡献！请：
@@ -188,6 +217,11 @@ blockmaxweight=3930000
 3. 提交更改
 4. 发起 Pull Request
 
+## 致谢
+
+- **原项目**: [Hydrapool](https://github.com/256-Foundation/Hydra-Pool) by 256 Foundation
+- **核心依赖**: [p2poolv2](https://github.com/p2poolv2/p2poolv2)
+
 ## 支持
 
 - **问题反馈**: [GitHub Issues](https://github.com/kxx2026/dmpool/issues)
@@ -195,4 +229,4 @@ blockmaxweight=3930000
 
 ---
 
-**DMPool** — 去中心化比特币挖矿池
+**DMPool** — Hydrapool 的衍生版本，用于定制化挖矿池运营

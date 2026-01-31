@@ -4,7 +4,11 @@
 
 **Production-ready deployment guide for DMPool Bitcoin mining pool**
 
+*A fork of Hydrapool by 256 Foundation*
+
 </div>
+
+> **Note**: DMPool is a derivative work based on [Hydrapool](https://github.com/256-Foundation/Hydra-Pool), originally developed by 256 Foundation and licensed under AGPLv3. This guide is adapted for the forked version.
 
 ## Table of Contents
 
@@ -17,6 +21,7 @@
 7. [Backup Strategy](#backup-strategy)
 8. [Maintenance](#maintenance)
 9. [Troubleshooting](#troubleshooting)
+10. [Compliance](#compliance)
 
 ---
 
@@ -260,7 +265,7 @@ sudo chown -R dmpool:dmpool /etc/dmpool /var/lib/dmpool /var/log/dmpool
 # Systemd service with drop privileges
 # /etc/systemd/system/dmpool.service
 [Unit]
-Description=DMPool Bitcoin Mining Pool
+Description=DMPool Bitcoin Mining Pool (Fork of Hydrapool)
 After=network.target bitcoin.service
 
 [Service]
@@ -414,8 +419,45 @@ pplns_ttl_days = 0.5  # Reduce retention
 
 ---
 
+## Compliance
+
+### AGPLv3 License Requirements
+
+As a derivative of Hydrapool (licensed under AGPLv3), DMPool must comply with the following:
+
+1. **Source Code Availability**: If you run DMPool as a network service, you must provide source code to users of that service
+2. **License Preservation**: All modifications must be licensed under AGPLv3
+3. **Attribution**: Credit to original authors (256 Foundation) must be maintained
+4. **State Changes**: Significant modifications must be documented
+
+### Original Project Attribution
+
+```
+DMPool is a fork of Hydrapool by 256 Foundation.
+Original project: https://github.com/256-Foundation/Hydra-Pool
+Original authors: Kulpreet Singh and contributors
+License: AGPLv3
+```
+
+### Providing Source to Users
+
+If you operate a public mining pool with DMPool, you must:
+
+1. Include a link to the source code in your pool's website footer
+2. Provide source upon request to pool users
+3. Maintain a public repository with your modifications
+
+Example footer text:
+```html
+Powered by DMPool, a fork of <a href="https://github.com/256-Foundation/Hydra-Pool">Hydrapool</a> 
+by 256 Foundation. Source code available at <a href="https://github.com/kxx2026/dmpool">GitHub</a>.
+```
+
+---
+
 ## Support
 
 - **Documentation**: [https://github.com/kxx2026/dmpool](https://github.com/kxx2026/dmpool)
+- **Original Project**: [https://github.com/256-Foundation/Hydra-Pool](https://github.com/256-Foundation/Hydra-Pool)
 - **Issues**: [GitHub Issues](https://github.com/kxx2026/dmpool/issues)
 - **Community**: [GitHub Discussions](https://github.com/kxx2026/dmpool/discussions)

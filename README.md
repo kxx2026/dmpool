@@ -2,13 +2,32 @@
 
 <div align="center">
 
-**DMPool** is an open-source Bitcoin mining pool implementing PPLNS (Pay Per Last N Shares) accounting with direct coinbase payouts.
+**DMPool** — A fork of Hydrapool, adapted for custom mining pool operations.
 
 [![Rust](https://img.shields.io/badge/rust-1.88.0+-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-AGPLv3-blue.svg)](./LICENSE)
 [![GitHub](https://img.shields.io/badge/source-kxx2026%2Fdmpool-green.svg)](https://github.com/kxx2026/dmpool)
+[![Forked from](https://img.shields.io/badge/forked%20from-256--Foundation%2FHydra--Pool-informational.svg)](https://github.com/256-Foundation/Hydra-Pool)
 
 </div>
+
+## About This Fork
+
+**DMPool** is a derivative work based on [Hydrapool](https://github.com/256-Foundation/Hydra-Pool), originally developed by [256 Foundation](https://github.com/256-Foundation).
+
+This fork maintains compatibility with the original project while being customized for specific mining pool operations. All modifications are released under the same **AGPLv3** license as required by the original project.
+
+### Original Project
+
+- **Project**: [Hydrapool](https://github.com/256-Foundation/Hydra-Pool)
+- **Authors**: 256 Foundation (Kulpreet Singh)
+- **License**: AGPLv3
+
+### This Fork
+
+- **Repository**: [kxx2026/dmpool](https://github.com/kxx2026/dmpool)
+- **Forked from**: 256-Foundation/Hydra-Pool
+- **License**: AGPLv3 (inherited from original)
 
 ## Overview
 
@@ -42,9 +61,9 @@ docker compose up -d
 ```
 
 Services will be available at:
-- **Stratum**: 
-- **API**: 
-- **Dashboard**: 
+- **Stratum**: `stratum://localhost:3333`
+- **API**: `http://localhost:46884`
+- **Dashboard**: `http://localhost:3000`
 
 ### Binary Installation
 
@@ -133,9 +152,9 @@ cargo build --release
 
 | Endpoint | Description |
 |----------|-------------|
-|  | Health check |
-|  | Download all PPLNS shares (JSON) |
-|  | Filtered shares |
+| `GET /health` | Health check |
+| `GET /pplns_shares` | Download all PPLNS shares (JSON) |
+| `GET /pplns_shares?start_time=X&end_time=Y` | Filtered shares |
 
 ## Monitoring
 
@@ -182,6 +201,16 @@ blockmaxweight=3930000
 
 This project is licensed under **AGPLv3** — see [LICENSE](./LICENSE) for details.
 
+This is a derivative work based on [Hydrapool](https://github.com/256-Foundation/Hydra-Pool) by 256 Foundation, originally licensed under AGPLv3. This fork maintains the same license in compliance with the original project's requirements.
+
+### AGPLv3 Summary
+
+This license requires:
+- **Source Availability**: If you run this software on a server and provide services to users, you must make the source code available to those users
+- **Share Alike**: Any modifications must be released under the same AGPLv3 license
+- **Attribution**: Credit must be given to the original authors (256 Foundation)
+- **State Changes**: Any significant modifications to the code must be noted
+
 ## Contributing
 
 Contributions are welcome! Please:
@@ -190,6 +219,11 @@ Contributions are welcome! Please:
 3. Make your changes
 4. Submit a pull request
 
+## Acknowledgments
+
+- **Original Project**: [Hydrapool](https://github.com/256-Foundation/Hydra-Pool) by 256 Foundation
+- **Core Dependencies**: [p2poolv2](https://github.com/p2poolv2/p2poolv2)
+
 ## Support
 
 - **Issues**: [GitHub Issues](https://github.com/kxx2026/dmpool/issues)
@@ -197,4 +231,4 @@ Contributions are welcome! Please:
 
 ---
 
-**DMPool** — Decentralized Mining Pool for Bitcoin
+**DMPool** — A fork of Hydrapool, adapted for custom mining pool operations
