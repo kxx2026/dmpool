@@ -85,7 +85,7 @@ Bad tag. Ignore.
 ### Fixed
 
 - Skip address validation if donation is 100%, i.e. we are using
-  hydrapool for a telelhash like event.
+  dmpool for a telelhash like event.
 - Bump p2poolv2 libs to v0.4.4
 
 ## [2.1.3] - 2026-01-12
@@ -130,14 +130,14 @@ Bad tag. Ignore.
 ### Added
 
 - Show coinbase distribution in grafana dashboard
-- Upgrade to p2poolv2 hydrapool.v0.4.0
+- Upgrade to p2poolv2 dmpool.v0.4.0
 
 ### Changed
 
 - BREAKING: Use bitcoin compatible serialisation of shares in
   database. This requires that you nuke your existing store.db
   directory and start the server from no data. We want to make this
-  change early before any servers are using Hydrapool at scale. We are
+  change early before any servers are using DMPool at scale. We are
   not shipping a script to migrate existing data - if you really need
   it, please reach out to us and we'll try to make it work for
   you. Ideally, a PR will be welcome too with a script to migrate the
@@ -191,7 +191,7 @@ Bad tag. Ignore.
 
 ### Added
 
-- Add docker files for hydrapool, grafana and prometheus
+- Add docker files for dmpool, grafana and prometheus
 - Add a docker compose file for ease of use for end users
 - Add docker build work flow to build docker images on github actions
 

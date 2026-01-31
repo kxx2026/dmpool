@@ -1,10 +1,10 @@
-# Hydrapool
+# DMPool
 
-[Hydrapool](https://hydrapool.org) is an open Source Bitcoin Mining
+[DMPool](https://dmpool.org) is an open Source Bitcoin Mining
 Pool with support for solo mining and PPLNS accounting.
 
 We have an instance mining on mainnet at
-[test.hydrapool.org](https://test.hydrapool.org). But we hope you'll
+[test.dmpool.org](https://test.dmpool.org). But we hope you'll
 run a pool for yourself. See below on [how to run your own instance](#run). We
 only accomodate up to 100 users atm for coinbase and block weight
 reasons, workers are limited by your hardware.
@@ -25,18 +25,18 @@ reasons, workers are limited by your hardware.
 6. Open source with AGPLv3. Feel free to extend and/or make changes.
 
 <a id="run"></a>
-# Running Your Own Hydrapool Instance
+# Running Your Own DMPool Instance
 
 ## Run with Docker
 
-We provide Dockerfile and docker compose files to run hydrapool using
+We provide Dockerfile and docker compose files to run dmpool using
 docker.
 
 ### Download docker compose and pool config file
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf -o docker-compose.yml https://github.com/256foundation/hydrapool/releases/latest/download/docker-compose.yml
-curl --proto '=https' --tlsv1.2 -LsSf -o config.toml https://github.com/256foundation/hydrapool/releases/latest/download/config-example.toml
+curl --proto '=https' --tlsv1.2 -LsSf -o docker-compose.yml https://github.com/256foundation/dmpool/releases/latest/download/docker-compose.yml
+curl --proto '=https' --tlsv1.2 -LsSf -o config.toml https://github.com/256foundation/dmpool/releases/latest/download/config-example.toml
 ```
 
 ### Edit config.toml
@@ -48,16 +48,16 @@ you use main network, change the bootstrap_address too.
 
 ### Edit bitcoin.conf
 You potentially need to reconfigure your Bitcoin node to allow RPC access from
-the network location at which Hydrapool is running.
+the network location at which DMPool is running.
 
-The provided docker-compose.yml runs Hydrapool and the monitoring containers
+The provided docker-compose.yml runs DMPool and the monitoring containers
 on an isolated, bridged network. Docker typically uses a `/16` subnet from the
 `172.16.0.0/12` private network range, with a gateway to the host at
 `172.16.0.1`, `172.17.0.1`, ... . For the case where the Bitcoin node and
 Docker are on the same machine, docker-compose.yml exposes the special
-hostname `host.docker.internal` inside the Hydrapool container, which resolves
+hostname `host.docker.internal` inside the DMPool container, which resolves
 to the gateway address. This special hostname is used in Bitcoin node URLs in
-Hydrapool's config.toml.
+DMPool's config.toml.
 
 If the Bitcoin node is on the same host as Docker, configure the Bitcoin node
 to accept connections from the bridged network, and allow access from addresses
@@ -71,11 +71,11 @@ something like:
 # allow connections from all interfaces, not just localhost
 rpcbind=0.0.0.0
 
-# allow Docker's bridged networks (for Hydrapool)
+# allow Docker's bridged networks (for DMPool)
 rpcallowip=172.16.0.0/12
 ```
 
-If the Bitcoin node is on a different host than Docker, configure Hydrapool's
+If the Bitcoin node is on a different host than Docker, configure DMPool's
 Bitcoin node URLs to point to that host. The Bitcoin node must accept
 connections and allow RPC from the Docker host, since container traffic will be
 NATed and appear to originate from the Docker host's IP address.
@@ -85,14 +85,14 @@ NATed and appear to originate from the Docker host's IP address.
 docker compose -f docker-compose.yml up
 ```
 
-The above will start hydrapool stratum server on port 3333. A
+The above will start dmpool stratum server on port 3333. A
 monitoring dashboard on port 3000. If you are running on localhost,
 `stratum://localhost:3333` and dashboard at
 `http://localhost::3000`.
 
 # Upgrading
 
-If you already have hydrapool running, use the following to pull the
+If you already have dmpool running, use the following to pull the
 latest images and restart with minimal downtime.
 
 ```bash
@@ -157,12 +157,12 @@ and then verify using:
 ```bash
 cosign verify \
     --certificate-identity-regexp=github.com/256foundation \
-    ghcr.io/256-foundation/hydrapool:<TAG>
+    ghcr.io/256-foundation/dmpool:<TAG>
 ```
 
 # Configuring `blockmaxweight` on Bitcoin
 
-When mining with Hydrapool you need to leave enough room in the block
+When mining with DMPool you need to leave enough room in the block
 for that coinbase transaction.  Otherwise, Bitcoin Core may reject
 your block template for exceeding the default maximum block weight of
 **4,000,000 weight units (WU)**.
@@ -212,7 +212,7 @@ We provide a command line tool to generate the salt and hashed
 password to use in your config file.
 
 ```
-docker compose run --rm hydrapool-cli gen-auth <USERNAME> <PASSWORD>
+docker compose run --rm dmpool-cli gen-auth <USERNAME> <PASSWORD>
 ```
 
 The above will generate config lines for pasting into your
@@ -228,9 +228,9 @@ To update prometheus with your new credentials:
 
 1. Copy the prometheus configuration template from GitHub to your local working folder:
 ```bash
-cp prometheus/prometheus.yml hydrapool/prometheus.yml
+cp prometheus/prometheus.yml dmpool/prometheus.yml
 ```
-2. Edit `hydrapool/prometheus.yml` and change the username and password to match what was passed to the gen-auth function above:
+2. Edit `dmpool/prometheus.yml` and change the username and password to match what was passed to the gen-auth function above:
 ```yaml
     basic_auth:
       username: '<USERNAME>'
@@ -254,8 +254,8 @@ sudo docker compose up -d
 ```
 
 Note: By default, prometheus uses the built-in configuration with
-credentials `hydrapool/hydrapool`. Creating a custom
-`hydrapool/prometheus.yml` file overrides this default configuration.
+credentials `dmpool/dmpool`. Creating a custom
+`dmpool/prometheus.yml` file overrides this default configuration.
 
 <a id="api"></a>
 # API Server
@@ -281,7 +281,7 @@ reverse proxy for the port, just like for the prometheus/grafana
 dashboard.
 
 
-# Other Options to Run Hydrapool
+# Other Options to Run DMPool
 
 ## Build from Source
 
@@ -295,7 +295,7 @@ Then enter the settings for your particular node setup in config.toml, and gener
 Finally, run from target directory.
 
 ```bash
-./target/release/hydrapool
+./target/release/dmpool
 ```
 To test it, you can send an API command using curl. 
 First, generate a Base64 string of your credentials:
@@ -352,28 +352,28 @@ cargo build --release
 ```
 
 
-## Install Hydrapool Binaries
+## Install DMPool Binaries
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/256-Foundation/Hydra-Pool/releases/latest/download/hydrapool-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/kxx2026/dmpool/releases/latest/download/dmpool-installer.sh | sh
 ```
 
 The above will install two binaries in your path:
 
-1. `hydrapool` - the binary to start the pool.
-2. `hydrapool_cli` - a utility to query the state of the pool, generate authentication tokens etc.
+1. `dmpool` - the binary to start the pool.
+2. `dmpool_cli` - a utility to query the state of the pool, generate authentication tokens etc.
 
 Both binaries come with the `--help` option that document the other
 options and commands they support.
 
 Binaries are available on the
-[releases](https://github.com/256-Foundation/Hydra-Pool/releases)
+[releases](https://github.com/kxx2026/dmpool/releases)
 page. We provide Linux, Windows and MacOS binaries. Go to releases
 page to access an older release.
 
 To run dashboard, we still recommned using docker
 
 ```
-docker compose up -d ghcr.io/256foundation/hydrapool-prometheus
-docker compose up -d ghcr.io/256foundation/hydrapool-grafana
+docker compose up -d ghcr.io/256foundation/dmpool-prometheus
+docker compose up -d ghcr.io/256foundation/dmpool-grafana
 ```

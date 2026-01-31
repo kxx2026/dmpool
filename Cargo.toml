@@ -1,18 +1,18 @@
 [package]
-name = "hydrapool"
+name = "dmpool"
 version = "2.4.0"
 edition = "2024"
 rust-version = "1.88.0"
 authors = ["Kulpreet Singh<kp@opdup.com>"]
 license = "AGPLv3"
-description = "Hydrapool - an open source PPLNS pool for bitcoin"
+description = "DMPool - an open source PPLNS pool for bitcoin"
 readme = "README.md"
-homepage = "https://hydrapool.org/"
-repository = "https://github.com/256-Foundation/Hydra-Pool/"
+homepage = "https://dmpool.org/"
+repository = "https://github.com/kxx2026/dmpool/"
 keywords = ["bitcoin", "mining", "pool", "p2p"]
 categories = ["cryptography::cryptocurrencies"]
 exclude=["tests"]
-default-run = "hydrapool"
+default-run = "dmpool"
 
 [profile.release]
 codegen-units = 1
@@ -37,12 +37,12 @@ p2poolv2_api = { git = "https://github.com/p2poolv2/p2poolv2", package = "p2pool
 bitcoindrpc = { git = "https://github.com/p2poolv2/p2poolv2", package = "bitcoindrpc", tag = "v0.7.0" }
 
 [[bin]]
-name = "hydrapool"
+name = "dmpool"
 test = false
 bench = false
 
 [[bin]]
-name = "hydrapool_cli"
+name = "dmpool_cli"
 test = false
 bench = false
 
@@ -51,7 +51,7 @@ maintainer = "Kulpreet Singh <kp@opdup.com>"
 copyright = "2024, Kulpreet Singh <kp@opdup.com>"
 license-file = ["LICENSE", "4"]
 extended-description = """\
-Hydrapool is an open source Bitcoin mining pool with support for solo mining \
+DMPool is an open source Bitcoin mining pool with support for solo mining \
 and PPLNS (Pay Per Last N Shares) accounting. Features include:\n\
   - Run a private solo pool or PPLNS pool\n\
   - Payouts made directly from coinbase (no custody)\n\
@@ -61,10 +61,10 @@ depends = "$auto, systemd"
 section = "net"
 priority = "optional"
 assets = [
-    ["target/release/hydrapool", "usr/bin/", "755"],
-    ["target/release/hydrapool_cli", "usr/bin/", "755"],
-    ["config.toml", "etc/hydrapool/config.toml", "644"],
+    ["target/release/dmpool", "usr/bin/", "755"],
+    ["target/release/dmpool_cli", "usr/bin/", "755"],
+    ["config.toml", "etc/dmpool/config.toml", "644"],
 ]
-conf-files = ["/etc/hydrapool/config.toml"]
+conf-files = ["/etc/dmpool/config.toml"]
 maintainer-scripts = "packages/debian/"
 systemd-units = { enable = false }

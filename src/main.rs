@@ -94,7 +94,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    info!("Starting Hydrapool...");
+    info!("Starting DMPool...");
     // Parse command line arguments
     let args = Args::parse();
 

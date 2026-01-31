@@ -16,7 +16,7 @@ donation_address = "bc1qce93hy5rhg02s6aeu7mfdvxg76x66pqqtrvzs3"
 # In basis points, 1% = 100 basis points. Default 0
 donation = 10000
 ignore_difficulty = true
-# Any fee amount for node/hydrapool provider to be sent to fee address. Default no fee.
+# Any fee amount for node/dmpool provider to be sent to fee address. Default no fee.
 # fee_address = "<your fee address here>"
 # In basis points, 1% = 100 basis points. Default 0
 # fee = 200
@@ -31,7 +31,7 @@ difficulty_multiplier = 1.0
 # to mine anonymous blocks. This signature is only used to show others
 # how large your pool is, if you are running private, there is no need
 # to add a pool signature. Maximum length 16 bytes.
-pool_signature = "hydrapool"
+pool_signature = "dmpool"
 
 [bitcoinrpc]
 # RPC credentials are loaded from env vars
@@ -51,6 +51,6 @@ stats_dir = "./logs/stats"
 hostname = "0.0.0.0"
 port = 46884
 # Optional authentication credentials
-auth_user = "hydrapool"
-# auth_token is of the format salt:password-hmac. Use can hydrapool_cli gen-auth to generate a token.
+auth_user = "dmpool"
+# auth_token is of the format salt:password-hmac. Use can dmpool_cli gen-auth to generate a token.
 auth_token = "0d74058f74ad3b6768493cedb5e9492b$2a2599d5f4003c291e141762d0e43808cfd932f04a8260e94c375d1574599dbf"
