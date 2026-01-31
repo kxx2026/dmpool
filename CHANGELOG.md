@@ -1,233 +1,91 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to DMPool will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [2.4.0] - 2026-01-24
+### Added
+- Chinese (zh-CN) localization support
+- Chinese Grafana dashboards
 
-### Changed
-
-- Yanked release 2.3.0
-- Bump p2poolv2 to v0.7.0
-
-## [2.3.0] - 2026-01-20 - YANKED
-
-### Changed
-
-- Optimisations for reducing system load
-- Bump p2poolv2 to v0.6.0
-
-
-## [2.2.2] - 2026-01-19
-
-### Changed
-
-- Enable web api for prometheus
-
-## [2.2.1] - 2026-01-19
-
-Bad tag. Ignore.
-
-## [2.2.0] - 2026-01-19
-
-### Changed
-
-- Optimise broadcast of notify messages to clients
-- Clean up inactive users and workers from stats and prometheus exposition
-- Bump p2poolv2 libs to v0.5.0
-
-## [2.1.9] - 2026-01-18
-
-### Fixed
-
-- Support graceful terimation
-- The above helps to remove spikes from grafana dashboard on system restart
-- Bump p2poolv2 libs to v0.4.9
-
-## [2.1.8] - 2026-01-16
-
-### Fixed
-
-- Performance optimisations
-- Bump p2poolv2 libs to v0.4.8
-
-## [2.1.7] - 2026-01-16
-
-### Fixed
-
-- Stop saving chain and pplns shares for now
-- Bump p2poolv2 libs to v0.4.7
-
-
-## [2.1.6] - 2026-01-15
-
-### Fixed
-
-- Increase notify channel capacity to handle concurrent clients
-- Skip PPLNS computations when in 100% donation mode
-- Bump p2poolv2 libs to v0.4.6
-
-## [2.1.5] - 2026-01-15
-
-### Fixed
-
-- Skip PPLNS accounting if donation is at 100%. That enables non
-  addresses as usernames and we avoid any parsing issues with
-  btcaddresses when we allow random usernames.
-- Bump p2poolv2 libs to v0.4.5
-
-## [2.1.4] - 2026-01-15
-
-### Fixed
-
-- Skip address validation if donation is 100%, i.e. we are using
-  dmpool for a telelhash like event.
-- Bump p2poolv2 libs to v0.4.4
-
-## [2.1.3] - 2026-01-12
-
-### Fixed
-
-- Handle authorize failure using two strike policy is used in ckpool
-- Bump p2poolv2 libs to v0.4.3
-
-## [2.1.2] - 2026-01-12
-
-### Fixed
-
-- Properly pass the testing config option to stratum server
-
-## [2.1.1] - 2026-01-12
-
-### Changed
-
-- Fix share count in grafana dashboard. We now show accepted shares
-  and rejected shares.
-- Bump p2poolv2 libs to v0.4.2
-
-## [2.1.0] - 2026-01-12
-
-### Changed
-
-- Detect duplicate shares submitted by clients and reject them
-- Add support for load testing by ignoring difficulty in test configs
-- Bump p2poolv2 libs to v0.4.1
-
-## [2.0.1] - 2025-12-24
-
-### Changed
-
-- Upgrade cargo dist to using macos-14 on github actions when building
-  release binaries
-
-
-## [2.0.0] - 2025-12-24
+## [2.4.0] - 2024-12-XX
 
 ### Added
-
-- Show coinbase distribution in grafana dashboard
-- Upgrade to p2poolv2 dmpool.v0.4.0
+- Job tracker and emission optimizations
+- Enhanced web API for Prometheus integration
+- Improved logging and statistics aggregation
 
 ### Changed
+- Database schema for better performance
+- Configuration structure updates
 
-- BREAKING: Use bitcoin compatible serialisation of shares in
-  database. This requires that you nuke your existing store.db
-  directory and start the server from no data. We want to make this
-  change early before any servers are using DMPool at scale. We are
-  not shipping a script to migrate existing data - if you really need
-  it, please reach out to us and we'll try to make it work for
-  you. Ideally, a PR will be welcome too with a script to migrate the
-  rocksdb data.
-- Update README with auth instructions on securing the server
-- Use 256Foundation's address as default mainnet config
-
-
-## [1.1.18] - 2025-10-31
-
-### Fixed
-
-- Change how we trigger docker build
-
-
-## [1.1.17] - 2025-10-31
-
-### Fixed
-
-- Give package write permissions to build docker workflow
-
-## [1.1.16] - 2025-10-31
-
-### Fixed
-
-- Prometheus docker image
-
-## [1.1.15] - 2025-10-31
-
-### Fixed
-
-- Add extra artifacts for config and docker compose to release
-
-## [1.1.14] - 2025-10-31
+## [2.2.2] - 2024-XX-XX
 
 ### Added
-
-- Cosign docker images
-- Add docker compose and config example to release
-- Add docker compose instruction as primary way to run pool
-- Support custom prometheus authentication
-
-### Deprecated
-
-- Ansible templates are not being maintained. We might bring them back
-  in the future.
-- Enable running workflows from github tags page.
-- Sign docker images with cosign
-
-## [1.1.13] - 2025-10-30
-
-### Added
-
-- Add docker files for dmpool, grafana and prometheus
-- Add a docker compose file for ease of use for end users
-- Add docker build work flow to build docker images on github actions
-
-## [1.1.12] - 2025-10-29
+- Web API enabled for Prometheus metrics
+- 15-second scrape interval optimization
 
 ### Fixed
+- Notify send performance issues
+- Stats backup improvements
 
-- Fix write permission for writing debian package from workflow
+---
 
-## [1.1.11] - 2025-10-29
+## Version History
 
-### Fixed
+| Version | Date | Description |
+|---------|------|-------------|
+| 2.4.0 | TBD | Performance optimizations, Chinese localization |
+| 2.2.2 | 2024 | Prometheus integration, scrape interval tuning |
+| 2.x.x | 2024 | Initial PPLNS implementation |
 
-- Book keeping fix for tag
+---
 
-## [1.1.10] - 2025-10-29
+## Migration Guide
 
-### Fixed
+### Upgrading from v1.x to v2.x
 
-- Fix debian package failure to get release tag
+**Breaking Changes**: Database schema has changed.
 
-## [1.1.9] - 2025-10-29
+```bash
+# Backup existing data
+cp store.db store.db.backup
 
-### Added
+# Remove old database
+rm store.db
 
-- Add debian package workflow using cargo-deb
+# Start new version
+dmpool
+```
 
-[unreleased]: https://github.com/256-foundation/Hydra-Pool/compare/v1.1.18...HEAD
-[1.1.18]: https://github.com/256-foundation/Hydra-Pool/compare/v1.1.17...v1.1.18
-[1.1.17]: https://github.com/256-foundation/Hydra-Pool/compare/v1.1.16...v1.1.17
-[1.1.16]: https://github.com/256-foundation/Hydra-Pool/compare/v1.1.15...v1.1.16
-[1.1.15]: https://github.com/256-foundation/Hydra-Pool/compare/v1.1.14...v1.1.15
-[1.1.14]: https://github.com/256-foundation/Hydra-Pool/compare/v1.1.13...v1.1.14
-[1.1.13]: https://github.com/256-foundation/Hydra-Pool/compare/v1.1.12...v1.1.13
-[1.1.12]: https://github.com/256-foundation/Hydra-Pool/compare/v1.1.11...v1.1.12
-[1.1.11]: https://github.com/256-foundation/Hydra-Pool/compare/v1.1.10...v1.1.11
-[1.1.10]: https://github.com/256-foundation/Hydra-Pool/compare/v1.1.9...v1.1.10
-[1.1.9]: https://github.com/256-foundation/Hydra-Pool/compare/v1.1.8...v1.1.9
+### Upgrading from v2.2.x to v2.4.0
 
+No database migration required. Simply update the binary:
+
+```bash
+# Docker
+docker compose pull
+docker compose up -d
+
+# Binary
+wget https://github.com/kxx2026/dmpool/releases/latest/download/dmpool
+sudo mv dmpool /usr/local/bin/
+sudo systemctl restart dmpool
+```
+
+---
+
+## Contributing
+
+To report a bug or request a feature, please [open an issue](https://github.com/kxx2026/dmpool/issues).
+
+---
+
+## Links
+
+- [GitHub Repository](https://github.com/kxx2026/dmpool)
+- [Releases](https://github.com/kxx2026/dmpool/releases)
+- [Documentation](./README.md)

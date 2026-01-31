@@ -1,250 +1,421 @@
-# Hydra-Pool 生产环境部署指南
+# DMPool Production Deployment Guide
 
-> 版本: 2.4.0
-> 更新时间: 2026-02-01
-> 部署目标: 生产环境
+<div align="center">
+
+**Production-ready deployment guide for DMPool Bitcoin mining pool**
+
+</div>
+
+## Table of Contents
+
+1. [System Requirements](#system-requirements)
+2. [Network Architecture](#network-architecture)
+3. [Installation](#installation)
+4. [Configuration](#configuration)
+5. [Monitoring](#monitoring)
+6. [Security Hardening](#security-hardening)
+7. [Backup Strategy](#backup-strategy)
+8. [Maintenance](#maintenance)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
-## 目录
+## System Requirements
 
-1. [系统要求](#1-系统要求)
-2. [硬件配置标准](#2-硬件配置标准)
-3. [网络架构设计](#3-网络架构设计)
-4. [部署前准备](#4-部署前准备)
-5. [安装部署](#5-安装部署)
-6. [配置详解](#6-配置详解)
-7. [监控告警](#7-监控告警)
-8. [安全加固](#8-安全加固)
-9. [运维管理](#9-运维管理)
-10. [故障排查](#10-故障排查)
+### Hardware Specifications
 
----
+| Tier | CPU | RAM | Storage | Network | Max Miners |
+|------|-----|-----|---------|---------|------------|
+| **Minimum** | 2 cores @ 2.0 GHz | 2 GB | 20 GB SSD | 100 Mbps | ~10 |
+| **Standard** | 4 cores @ 2.5 GHz | 8 GB | 100 GB NVMe | 1 Gbps | ~50 |
+| **High Performance** | 8 cores @ 3.0 GHz | 16 GB | 500 GB NVMe | 10 Gbps | ~200 |
+| **Enterprise** | 16+ cores @ 3.5 GHz | 32 GB | 2 TB NVMe RAID10 | 10 Gbps | 500+ |
 
-## 1. 系统要求
+### Operating System
 
-### 1.1 操作系统
+- **Recommended**: Ubuntu 24.04 LTS
+- **Supported**: Debian 12+, Rocky Linux 9+, Arch Linux
 
-| 环境 | 最低版本 | 推荐版本 | 状态 |
-|------|----------|----------|------|
-| Ubuntu | 22.04 LTS | 24.04 LTS | ✅ 完全支持 |
-| Debian | 11 (Bullseye) | 12 (Bookworm) | ✅ 完全支持 |
-| CentOS/RHEL | 8 | 9 Stream | ⚠️ 需额外依赖 |
-| macOS | 13 (Ventura) | 14 (Sonoma) | ✅ 开发/测试 |
-
-**生产环境推荐**: Ubuntu 24.04 LTS
-
-### 1.2 软件依赖
-
-#### 必需组件
-
-- Rust 工具链: rustc 1.88.0+, cargo 1.88.0+
-- 系统库: libssl-dev, pkg-config, clang 14+, libclang-dev
-- 运行时库: libzmq5, libzstd1, libsnappy1v5, libbz2-1.0, liblz4-1
-
-#### 安装命令
+### Software Dependencies
 
 ```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install -y build-essential clang pkg-config libssl-dev libclang-dev libzmq3-dev cmake libzstd-dev libsnappy-dev libbz2-dev liblz4-dev zlib1g-dev
+# Bitcoin Core (24.0+)
+sudo apt install -y bitcoind
 
-# Rust 安装
+# Docker & Docker Compose (for containerized deployment)
+curl -fsSL https://get.docker.com | sh
+
+# Rust 1.88.0+ (for building from source)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
 ```
 
 ---
 
-## 2. 硬件配置标准
+## Network Architecture
 
-### 2.1 最小配置（测试/开发环境）
+### Port Layout
 
-> ⚠️ 不适用于生产环境
+| Port | Service | Public Exposure |
+|------|---------|-----------------|
+| 3333 | Stratum (Mining) | Yes |
+| 46884 | API Server | No (VPN/Internal) |
+| 3000 | Grafana Dashboard | No (VPN/Internal) |
+| 9090 | Prometheus | No (Internal only) |
+| 28334 | ZMQ (Bitcoin → Pool) | No (Local) |
 
-| 组件 | 规格 | 说明 |
-|------|------|------|
-| **CPU** | 2核心 | x86_64 或 ARM64 |
-| **内存** | 2 GB | 4 GB 推荐 |
-| **存储** | 20 GB SSD | RocksDB 性能依赖 SSD |
-| **网络** | 100 Mbps | 上行带宽 |
+### Firewall Rules
 
-### 2.2 标准配置（小型生产环境）
+```bash
+# UFW (Ubuntu)
+sudo ufw allow 3333/tcp comment 'DMPool Stratum'
+sudo ufw allow 22/tcp comment 'SSH'
+sudo ufw enable
 
-> ✅ 推荐：< 100 矿机并发
-
-| 组件 | 规格 | 说明 |
-|------|------|------|
-| **CPU** | 4核心 @ 2.5GHz+ | 推荐 AMD Ryzen 5 或 Intel i5 |
-| **内存** | 8 GB | 16 GB 更佳 |
-| **存储** | 100 GB NVMe SSD | 系统盘 + 数据盘分离 |
-| **网络** | 1 Gbps | 对称带宽，低延迟 |
-| **公网IP** | 必需 | 固定 IP 或浮动 IP |
-
-### 2.3 高性能配置（中型生产环境）
-
-> ✅ 推荐：100-1000 矿机并发
-
-| 组件 | 规格 | 说明 |
-|------|------|------|
-| **CPU** | 8核心 @ 3.0GHz+ | 推荐 AMD Ryzen 7/9 或 Intel i7 |
-| **内存** | 16 GB | 32 GB 更佳 |
-| **系统盘** | 200 GB NVMe SSD | 操作系统 + 应用 |
-| **数据盘** | 500 GB NVMe SSD | RocksDB 专用 |
-| **网络** | 10 Gbps | 数据中心级别 |
-
-### 2.4 企业配置（大型生产环境）
-
-> ✅ 推荐：> 1000 矿机并发
-
-| 组件 | 规格 | 说明 |
-|------|------|------|
-| **CPU** | 16+ 核心 @ 3.5GHz+ | AMD EPYC 或 Intel Xeon |
-| **内存** | 32+ GB | 64 GB 更佳 |
-| **系统盘** | 500 GB NVMe SSD | RAID1 镜像 |
-| **数据盘** | 2 TB NVMe SSD | RAID10 阵列 |
-| **网络** | 10 Gbps+ | 冗余链路 |
+# iptables
+iptables -A INPUT -p tcp --dport 3333 -j ACCEPT
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+iptables -P INPUT DROP
+```
 
 ---
 
-## 3. 网络架构设计
+## Installation
 
-### 3.1 端口规划
+### Method 1: Docker (Recommended)
 
-| 端口 | 服务 | 公网访问 | 认证 |
-|------|------|----------|------|
-| 3333 | Stratum 挖矿 | ✅ 必须 | 否 |
-| 46884 | API 服务 | ⚠️ 可选 | Basic Auth |
-| 3000 | Grafana 面板 | ⚠️ 可选 | 用户名/密码 |
-| 9090 | Prometheus | ❌ 本地 | Basic Auth |
+```bash
+# 1. Download configs
+curl -fsSL https://github.com/kxx2026/dmpool/releases/latest/download/docker-compose.yml -o docker-compose.yml
+curl -fsSL https://github.com/kxx2026/dmpool/releases/latest/download/config-example.toml -o config.toml
 
-### 3.2 带宽需求
+# 2. Configure
+nano config.toml
 
-| 矿机数 | 带宽需求 | 推荐配置 |
-|--------|----------|----------|
-| < 50 | 50 Mbps | 家庭宽带 |
-| 50-200 | 200 Mbps | 企业专线 |
-| 200-500 | 500 Mbps | 数据中心级别 |
-| 500+ | 1+ Gbps | 多线冗余 |
+# 3. Start services
+docker compose up -d
+
+# 4. Verify
+docker compose ps
+docker compose logs -f dmpool
+```
+
+### Method 2: Debian Package
+
+```bash
+# Download and install
+wget https://github.com/kxx2026/dmpool/releases/latest/download/dmpool_2.4.0_amd64.deb
+sudo dpkg -i dmpool_2.4.0_amd64.deb
+
+# Configure
+sudo nano /etc/dmpool/config.toml
+
+# Start service
+sudo systemctl enable dmpool
+sudo systemctl start dmpool
+```
+
+### Method 3: Build from Source
+
+```bash
+# Install build dependencies
+sudo apt install -y libssl-dev pkg-config clang libclang-dev
+
+# Clone and build
+git clone https://github.com/kxx2026/dmpool.git
+cd dmpool
+cargo build --release
+
+# Install
+sudo cp target/release/dmpool /usr/local/bin/
+sudo cp target/release/dmpool_cli /usr/local/bin/
+sudo cp config.toml /etc/dmpool/
+```
 
 ---
 
-## 4. 部署前准备
+## Configuration
 
-### 4.1 比特币节点要求
+### Bitcoin RPC Setup
 
 ```ini
 # bitcoin.conf
-
-# RPC 访问配置
-rpcbind=0.0.0.0
+server=1
+rest=1
+rpcuser=dmpool_rpc
+rpcpassword=CHANGE_THIS_SECURE_PASSWORD
 rpcallowip=127.0.0.1
-rpcallowip=<Pool服务器IP>
-rpcallowip=172.16.0.0/12
-
-# ZMQ 区块通知 (必需)
+rpcbind=0.0.0.0
 zmqpubhashblock=tcp://0.0.0.0:28334
 
-# Coinbase 空间预留
+# Reserve space for coinbase (500 outputs)
 blockmaxweight=3930000
 ```
 
----
-
-## 5. 安装部署
-
-### 5.1 方式一：Docker Compose（推荐）
-
-```bash
-cd /opt
-mkdir dmpool
-cd dmpool
-
-curl --proto '=https' --tlsv1.2 -LsSf -o docker-compose.yml \
-    https://github.com/256-Foundation/dmpool/releases/latest/download/docker-compose.yml
-
-curl --proto '=https' --tlsv1.2 -LsSf -o config.toml \
-    https://github.com/256-Foundation/dmpool/releases/latest/download/config-example.toml
-
-nano config.toml
-docker compose up -d
-```
-
----
-
-## 6. 配置详解
-
-### 6.1 核心配置项
+### DMPool Configuration
 
 ```toml
+# /etc/dmpool/config.toml
 [store]
 path = "/var/lib/dmpool/store.db"
 background_task_frequency_hours = 24
-pplns_ttl_days = 7
+pplns_ttl_days = 1
 
 [stratum]
 hostname = "0.0.0.0"
 port = 3333
 start_difficulty = 1
 minimum_difficulty = 1
-bootstrap_address = "bc1q YOUR_ADDRESS"
-zmqpubhashblock = "tcp://<比特币节点IP>:28334"
+bootstrap_address = "bc1qYOUR_ADDRESS"
+donation_address = "bc1qDONATION_ADDRESS"
+donation = 100  # 1% (100 basis points)
+zmqpubhashblock = "tcp://127.0.0.1:28334"
 network = "main"
+pool_signature = "dmpool"
+
+[bitcoinrpc]
+url = "http://127.0.0.1:8332"
+username = "dmpool_rpc"
+password = "YOUR_SECURE_PASSWORD"
+
+[logging]
+level = "info"
+stats_dir = "/var/log/dmpool/stats"
+
+[api]
+hostname = "127.0.0.1"
+port = 46884
+auth_user = "admin"
+auth_token = "GENERATE_WITH_dmpool_cli"
 ```
 
----
-
-## 7. 监控告警
-
-### 7.1 Prometheus 监控
-
-| 指标 | 说明 | 告警阈值 |
-|------|------|----------|
-| `shares_accepted_total` | 接受的 shares | 下降 >50% |
-| `shares_rejected_total` | 拒绝的 shares | >5% 比率 |
-| pool_hashrate | 矿池算力 | 下降 >30% |
-
----
-
-## 8. 安全加固
-
-### 8.1 防火墙配置
+### Generate Authentication Token
 
 ```bash
-sudo ufw allow 22/tcp
-sudo ufw allow 3333/tcp
-sudo ufw allow 46884/tcp
-sudo ufw enable
+dmpool_cli gen-auth admin YOUR_PASSWORD
 ```
 
 ---
 
-## 9. 运维管理
+## Monitoring
 
-### 9.1 备份策略
+### Prometheus + Grafana Setup
+
+```bash
+# Add to docker-compose.yml
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=CHANGE_ME
+```
+
+### Key Metrics to Monitor
+
+| Metric | Description | Alert Threshold |
+|--------|-------------|-----------------|
+| Pool Hashrate | Total mining power | < 50% of expected |
+| Share Rate | Shares per second | < 1/s for 5min |
+| API Latency | Response time | > 500ms |
+| DB Size | Database growth | > 10 GB/day |
+| Connection Count | Active miners | Unexpected drop |
+
+---
+
+## Security Hardening
+
+### 1. System Hardening
+
+```bash
+# Disable root login
+sudo sed -i 's/PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
+
+# Configure fail2ban
+sudo apt install fail2ban
+sudo systemctl enable fail2ban
+
+# Enable automatic updates
+sudo apt install unattended-upgrades
+sudo dpkg-reconfigure -plow unattended-upgrades
+```
+
+### 2. Application Security
+
+```bash
+# Run as non-root user
+sudo useradd -r -s /bin/false dmpool
+sudo chown -R dmpool:dmpool /etc/dmpool /var/lib/dmpool /var/log/dmpool
+
+# Systemd service with drop privileges
+# /etc/systemd/system/dmpool.service
+[Unit]
+Description=DMPool Bitcoin Mining Pool
+After=network.target bitcoin.service
+
+[Service]
+Type=simple
+User=dmpool
+Group=dmpool
+WorkingDirectory=/etc/dmpool
+ExecStart=/usr/local/bin/dmpool
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 3. Network Security
+
+```bash
+# Rate limiting with nginx
+limit_req_zone \ zone=api_limit:10m rate=10r/s;
+
+server {
+    listen 443 ssl http2;
+    server_name pool.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/pool.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/pool.example.com/privkey.pem;
+
+    location /api/ {
+        limit_req zone=api_limit;
+        proxy_pass http://localhost:46884;
+        proxy_set_header Host \;
+    }
+}
+```
+
+---
+
+## Backup Strategy
+
+### Automated Backup Script
 
 ```bash
 #!/bin/bash
-BACKUP_DIR="/backup/dmpool"
+# /usr/local/bin/backup-dmpool.sh
+
+BACKUP_DIR="/backups/dmpool"
 DATE=$(date +%Y%m%d_%H%M%S)
-mkdir -p "$BACKUP_DIR"
-docker run --rm -v dmpool_data:/data -v "$BACKUP_DIR":/backup alpine tar czf "/backup/dmpool_${DATE}.tar.gz" /data
+
+# Backup database
+sudo -u dmpool cp /var/lib/dmpool/store.db "\/store_\.db"
+
+# Backup config
+cp /etc/dmpool/config.toml "\/config_\.toml"
+
+# Compress and cleanup
+find "\" -name "store_*" -mtime +7 -delete
+find "\" -name "config_*" -mtime +30 -delete
+
+echo "Backup completed: \"
+```
+
+### Offsite Backup
+
+```bash
+# Rsync to remote server
+rsync -avz --delete /var/lib/dmpool/ backup-server:/backups/dmpool/
+
+# Or use restic for encrypted backups
+restic backup /var/lib/dmpool/ /etc/dmpool/
+restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12
 ```
 
 ---
 
-## 10. 故障排查
+## Maintenance
 
-### 10.1 常见问题
+### Regular Tasks
 
-#### 问题 1: ZMQ 连接失败
+| Frequency | Task | Command |
+|-----------|------|---------|
+| Daily | Check logs |  |
+| Weekly | Review alerts | Check Grafana dashboards |
+| Weekly | Backup verification | Test restore procedure |
+| Monthly | Update software |  |
+| Quarterly | Security audit | Review access logs |
 
-**解决方案**:
-1. 检查比特币节点 ZMQ 配置
-2. 验证端口 28334 开放
-3. 检查防火墙规则
+### Update Procedure
+
+```bash
+# 1. Stop service
+sudo systemctl stop dmpool
+
+# 2. Backup current version
+sudo cp /usr/local/bin/dmpool /usr/local/bin/dmpool.backup
+
+# 3. Install new version
+wget https://github.com/kxx2026/dmpool/releases/latest/download/dmpool
+sudo chmod +x dmpool
+sudo mv dmpool /usr/local/bin/
+
+# 4. Start service
+sudo systemctl start dmpool
+
+# 5. Verify
+sudo systemctl status dmpool
+dmpool_cli --version
+```
 
 ---
 
-*文档版本: 2.4.0*
-*最后更新: 2026-02-01*
+## Troubleshooting
+
+### Common Issues
+
+**Issue**: Miners cannot connect
+```bash
+# Check stratum is listening
+sudo ss -nltp | grep 3333
+
+# Check firewall
+sudo ufw status
+
+# Check logs
+journalctl -u dmpool -f
+```
+
+**Issue**: No new blocks
+```bash
+# Verify ZMQ connection
+sudo netstat -an | grep 28334
+
+# Check Bitcoin node
+bitcoin-cli getblockcount
+```
+
+**Issue**: High memory usage
+```bash
+# Check database size
+du -sh /var/lib/dmpool/store.db
+
+# Adjust TTL in config.toml
+pplns_ttl_days = 0.5  # Reduce retention
+```
+
+### Log Locations
+
+- **Systemd journal**: 
+- **Application logs**: 
+- **Bitcoin logs**: 
+
+---
+
+## Support
+
+- **Documentation**: [https://github.com/kxx2026/dmpool](https://github.com/kxx2026/dmpool)
+- **Issues**: [GitHub Issues](https://github.com/kxx2026/dmpool/issues)
+- **Community**: [GitHub Discussions](https://github.com/kxx2026/dmpool/discussions)

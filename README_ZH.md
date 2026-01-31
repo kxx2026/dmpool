@@ -1,152 +1,198 @@
 # DMPool
 
-[DMPool](https://dmpool.org) 是一个开源的比特币挖矿池软件，支持独立挖矿（Solo Mining）和 PPLNS 收益分配模式。
+<div align="center">
 
-我们在主网运行了一个实例：[test.dmpool.org](https://test.dmpool.org)。但我们希望您能运行自己的矿池。请参阅下方的[如何运行](#运行)部分。目前限制最多 100 个用户（因 coinbase 和区块大小限制），矿机数量取决于您的硬件。
+**DMPool** 是一个开源的比特币挖矿池软件，实现 PPLNS 收益分配，支持直接从 coinbase 支付。
 
-## 功能特性
+[![Rust](https://img.shields.io/badge/rust-1.88.0+-orange.svg)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/license-AGPLv3-blue.svg)](./LICENSE)
+[![GitHub](https://img.shields.io/badge/source-kxx2026%2Fdmpool-green.svg)](https://github.com/kxx2026/dmpool)
 
-1. **私有矿池** — 可运行私有独立矿池或社区 PPLNS 矿池
-2. **Coinbase 直接支付** — 收益直接从 coinbase 支付，矿池运营商不托管任何资金
-3. **透明可验证** — 用户可下载并验证 shares 和收益分配数据
-4. **监控面板** — 基于 Prometheus 和 Grafana 的矿池、用户和矿机监控
-5. **兼容性强** — 支持任何支持 Bitcoin RPC 的节点
-6. **Rust 实现** — 易于扩展，支持自定义分配和支付方案
-7. **开源协议** — AGPLv3 许可证
+</div>
 
-<a id="运行"></a>
-# 运行自己的 DMPool 实例
+## 简介
 
-## 使用 Docker 运行
+DMPool 让您能够运行自己的比特币挖矿池，实现**零托管** — 所有收益直接从 coinbase 交易支付，矿池运营商不接触用户资金。
 
-我们提供 Dockerfile 和 docker compose 文件，方便快速部署。
+### 核心特性
 
-### 下载 docker compose 和配置文件
+| 特性 | 说明 |
+|------|------|
+| **非托管** | 收益直接从 coinbase 支付，无需信任 |
+| **PPLNS 算法** | 基于贡献算力的公平分配 |
+| **透明可验证** | 公开 API 支持份额和收益审计 |
+| **监控面板** | 集成 Prometheus/Grafana 仪表盘 |
+| **广泛兼容** | 支持任何 Bitcoin RPC 节点 |
+| **易于扩展** | Rust 实现，支持自定义 |
+
+## 快速开始
+
+### Docker 部署（推荐）
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf -o docker-compose.yml https://github.com/256foundation/dmpool/releases/latest/download/docker-compose.yml
-curl --proto '=https' --tlsv1.2 -LsSf -o config.toml https://github.com/256foundation/dmpool/releases/latest/download/config-example.toml
+# 下载配置文件
+curl -fsSL https://github.com/kxx2026/dmpool/releases/latest/download/docker-compose.yml -o docker-compose.yml
+curl -fsSL https://github.com/kxx2026/dmpool/releases/latest/download/config-example.toml -o config.toml
+
+# 编辑配置文件
+nano config.toml
+
+# 启动矿池
+docker compose up -d
 ```
 
-### 编辑 config.toml
+服务地址：
+- **Stratum**: `stratum://localhost:3333`
+- **API**: `http://localhost:46884`
+- **监控面板**: `http://localhost:3000`
 
-根据您的比特币节点配置修改以下参数：
-- `bitcoinrpc` — 比特币节点 RPC 地址
-- `zmqpubhashblock` — ZMQ 新区块通知地址
-- `network` — 网络类型（signet/main）
-- `bootstrap_address` — 主网需要修改为您的地址
+### 二进制安装
 
-### 配置比特币节点
+```bash
+curl -fsSL https://github.com/kxx2026/dmpool/releases/latest/download/dmpool-installer.sh | sh
+```
 
-需要在 `bitcoin.conf` 中允许 DMPool 连接：
+## 配置说明
+
+编辑 `config.toml`：
+
+```toml
+[store]
+path = "./store.db"
+pplns_ttl_days = 1
+
+[stratum]
+hostname = "0.0.0.0"
+port = 3333
+bootstrap_address = "bc1q...你的地址"
+zmqpubhashblock = "tcp://127.0.0.1:28334"
+network = "main"
+pool_signature = "dmpool"
+
+[bitcoinrpc]
+url = "http://127.0.0.1:8332"
+username = "bitcoin"
+password = "你的RPC密码"
+
+[api]
+hostname = "0.0.0.0"
+port = 46884
+auth_user = "dmpool"
+auth_token = "生成的令牌"
+```
+
+生成认证令牌：
+
+```bash
+dmpool_cli gen-auth <用户名> <密码>
+```
+
+## 源码编译
+
+```bash
+# 安装依赖 (Ubuntu/Debian)
+sudo apt install -y libssl-dev pkg-config clang libclang-dev
+
+# 克隆并编译
+git clone https://github.com/kxx2026/dmpool.git
+cd dmpool
+cargo build --release
+
+# 运行
+./target/release/dmpool
+```
+
+**系统要求**: Rust 1.88.0+
+
+## 架构设计
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         矿工                                │
+│  (stratum://pool:3333)                                      │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      DMPool 核心                            │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────────┐   │
+│  │  Stratum    │  │   PPLNS      │  │   Coinbase      │   │
+│  │  服务器     │─▶│   引擎       │─▶│   构建器        │   │
+│  └─────────────┘  └──────────────┘  └─────────────────┘   │
+│         │                    │                    │         │
+└─────────┼────────────────────┼────────────────────┼─────────┘
+          │                    │                    │
+          ▼                    ▼                    ▼
+    ┌─────────┐          ┌──────────┐         ┌──────────┐
+    │  Rocks  │          │ Prometheus│        │ Bitcoin  │
+    │    DB   │          │   API    │         │   RPC    │
+    └─────────┘          └──────────┘         └──────────┘
+```
+
+## API 接口
+
+| 端点 | 说明 |
+|------|------|
+| `GET /health` | 健康检查 |
+| `GET /pplns_shares` | 下载所有 PPLNS 份额（JSON） |
+| `GET /pplns_shares?start_time=X&end_time=Y` | 按时间过滤份额 |
+
+## 监控面板
+
+```bash
+docker compose up -d prometheus grafana
+```
+
+仪表盘包含：
+- 矿池算力和每秒份额数
+- 用户和矿工统计
+- 难度追踪
+- 运行时间监控
+
+## 比特币节点配置
+
+在 `bitcoin.conf` 中调整 `blockmaxweight` 为 coinbase 输出预留空间：
 
 ```ini
-# 允许所有接口连接
-rpcbind=0.0.0.0
-
-# 允许 Docker 网络访问
-rpcallowip=172.16.0.0/12
+# 为约 500 个 P2PKH 输出预留空间
+blockmaxweight=3930000
 ```
 
-### 启动矿池
+| 输出数量 | Coinbase 权重 | 推荐 `blockmaxweight` |
+|----------|---------------|------------------------|
+| 100      | ~13,808 WU    | 3,986,000              |
+| 500      | ~68,208 WU    | 3,930,000              |
+| 1,000    | ~136,208 WU   | 3,860,000              |
 
-```bash
-docker compose -f docker-compose.yml up
-```
+## 安全建议
 
-启动后：
-- Stratum 服务端口：`3333`
-- 监控面板地址：`http://localhost:3000`
+- **API 认证**: 配置 `auth_user` 和 `auth_token`
+- **防火墙**: 限制 API 访问来源 IP
+- **HTTPS**: 使用 nginx/Caddy 作为反向代理
+- **及时更新**: 关注安全补丁
 
-# 升级
+## 文档
 
-```bash
-cd <docker-compose.yml 所在目录>
+- [部署指南](./DEPLOYMENT.md) — 生产环境部署
+- [更新日志](./CHANGELOG.md) — 版本历史
 
-# 拉取最新镜像
-docker compose pull
+## 许可证
 
-# 重建容器
-docker compose up -d --force-recreate
-```
+本项目采用 **AGPLv3** 许可证 — 详见 [LICENSE](./LICENSE)
 
-> **注意**：从 v1.x.x 升级到 **v2.x.x 或更高版本**时，数据库格式已更改，需要重置：
-> ```bash
-> docker compose down -v
-> docker compose up -d
-> ```
+## 贡献
 
-# 监控面板
+欢迎贡献！请：
+1. Fork 本仓库
+2. 创建特性分支
+3. 提交更改
+4. 发起 Pull Request
 
-## 矿池面板
+## 支持
 
-显示矿池整体算力、每秒 shares、最高难度、用户和矿机数量、算力分布等。
-
-![矿池面板预览](./docs/images/pool_dashboard.png)
-
-## 用户面板
-
-显示指定用户的所有矿机算力和独立矿机算力。
-
-![用户面板预览](./docs/images/users_dashboard.png)
-
-# 安全配置
-
-如果对外提供 API 服务，建议配置认证。使用以下命令生成认证令牌：
-
-```bash
-docker compose run --rm dmpool-cli gen-auth <用户名> <密码>
-```
-
-将生成的配置复制到 `config.toml` 中的 `auth_user` 和 `auth_token`。
-
-# API 服务
-
-矿池启动时会同时启动 API 服务器。
-
-- 获取 PPLNS Shares：`http://<服务器IP>:<API端口>/pplns_shares`
-- 支持 `start_time` 和 `end_time` 参数过滤时间范围
-
-# 从源码构建
-
-```bash
-git clone https://github.com/256-foundation/Hydra-Pool/
-cargo build --release
-```
-
-### 系统要求
-
-- Rust 1.88.0 或更高版本
-- OpenSSL 开发库
-- libclang
-
-### 安装依赖（Ubuntu）
-
-```bash
-sudo apt update
-sudo apt install libssl-dev pkg-config clang libclang-dev
-```
-
-### 运行
-
-```bash
-./target/release/dmpool --config config.toml
-```
-
-# 安装预编译二进制
-
-```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/kxx2026/dmpool/releases/latest/download/dmpool-installer.sh | sh
-```
-
-将安装两个二进制文件：
-- `dmpool` — 矿池主程序
-- `dmpool_cli` — 命令行工具
-
-# 许可证
-
-本项目使用 [AGPLv3](LICENSE) 许可证。
+- **问题反馈**: [GitHub Issues](https://github.com/kxx2026/dmpool/issues)
+- **讨论交流**: [GitHub Discussions](https://github.com/kxx2026/dmpool/discussions)
 
 ---
 
-*[English Version](README.md)*
+**DMPool** — 去中心化比特币挖矿池
