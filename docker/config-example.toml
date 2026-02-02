@@ -1,4 +1,19 @@
-# Hydrapool Docker Configuration Example
+# DMPool Docker Configuration Example
+#
+# ⚠️ CRITICAL PARAMETERS - READ BEFORE DEPLOYING ⚠️
+#
+# 1. donation: In basis points (100 = 1%).
+#    - donation = 10000 means 100% (miners get NOTHING!)
+#    - Recommended: 0 for no donation, or 50-100 for 0.5-1%
+#
+# 2. pplns_ttl_days: How long shares are valid for PPLNS calculation
+#    - 1 day = shares expire too quickly (miners lose ~85% of earnings)
+#    - RECOMMENDED: 7 days (standard PPLNS window)
+#
+# 3. ignore_difficulty: Skip share difficulty validation
+#    - true = may accept invalid shares, unfair payouts
+#    - RECOMMENDED: false (always validate)
+#
 # Copy this file to config.toml and edit for your setup:
 #   cp config-example.toml config.toml
 
@@ -11,8 +26,8 @@ pplns_ttl_days = 7
 [stratum]
 hostname = "0.0.0.0"
 port = 3333
-start_difficulty = 1
-minimum_difficulty = 1
+start_difficulty = 32
+minimum_difficulty = 16
 
 # REQUIRED: Change this to YOUR Bitcoin address. Default is 256
 # Foundation donation address.
@@ -22,12 +37,17 @@ minimum_difficulty = 1
 bootstrap_address = "bc1qypskemx80lznv4tjpnmpw9c5pgpy32fpkk3sw2"
 
 # Optional: Donation to developers (in basis points, 100 = 1%)
+# IMPORTANT: If set, miners receive (100% - donation) of rewards
+# Recommended: Comment out for 0%, or set to 50 for 0.5%
 # donation_address = "<your donation address here>"
 # donation = 50
 
 # Optional: Pool operator fee (in basis points, 100 = 1%)
 # fee_address = "<your fee address here>"
 # fee = 200
+
+# CRITICAL: Set to false in production for fair PPLNS calculation
+ignore_difficulty = false
 
 # REQUIRED: Change to match your Bitcoin node's ZMQ endpoint
 # For Docker: use "tcp://host.docker.internal:28334" to connect to host
@@ -73,4 +93,3 @@ port = 46884
 # 2. prometheus.yml to update auth
 auth_user = "hydrapool"
 auth_token = "28a556ceb0b24c9b664d1e35a81239ed$5c9fb3271b22be05eb87272ce11c3cad55242d045eb379873ce0dc821586204a"
-

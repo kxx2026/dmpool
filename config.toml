@@ -1,56 +1,60 @@
+# DMPool Configuration
+# Fixed for production use
+
 [store]
-path = "./store.db"
+path = ./store.db
 background_task_frequency_hours = 24
-pplns_ttl_days = 1
+pplns_ttl_days = 7
 
 [stratum]
-hostname = "0.0.0.0"
+hostname = 0.0.0.0
 port = 3333
-start_difficulty = 1
-minimum_difficulty = 1
-# The bitcoin address to use for first jobs when there are no
-# shares. The default provided is the 256 Foundation address.
-bootstrap_address = "bc1qce93hy5rhg02s6aeu7mfdvxg76x66pqqtrvzs3"
-# Any donation amount for developers to be sent to donation address. Default no donation.
-donation_address = "bc1qce93hy5rhg02s6aeu7mfdvxg76x66pqqtrvzs3"
-# In basis points, 1% = 100 basis points. Default 0
-donation = 10000
-ignore_difficulty = true
-# Any fee amount for node/dmpool provider to be sent to fee address. Default no fee.
-# fee_address = "<your fee address here>"
-# In basis points, 1% = 100 basis points. Default 0
+start_difficulty = 32
+minimum_difficulty = 16
+
+# IMPORTANT: Set this to YOUR Bitcoin address for miner payouts
+bootstrap_address = bc1qce93hy5rhg02s6aeu7mfdvxg76x66pqqtrvzs3
+
+# Developer donation (optional, in basis points: 100 = 1%)
+# Recommended: 0 for no donation, or 50 for 0.5% to support development
+# donation_address = bc1qce93hy5rhg02s6aeu7mfdvxg76x66pqqtrvzs3
+# donation = 0
+
+# Pool operator fee (optional, in basis points: 100 = 1%)
+# Uncomment and set your fee address if you want to charge a fee
+# fee_address = your_fee_address_here
 # fee = 200
-zmqpubhashblock = "tcp://127.0.0.1:28334"
-# The network can be "main", "testnet4" or "signet"
-network = "main"
-version_mask = "1fffe000"
-# The difficulty multiplier defines the window size for calculating payout proportions
-# See https://github.com/p2poolv2/p2poolv2/wiki/Difficult-Multiplier on how to choose this
+
+# CRITICAL: Do NOT ignore difficulty in production
+ignore_difficulty = false
+
+# Bitcoin node ZMQ endpoint
+zmqpubhashblock = tcp://127.0.0.1:28334
+
+# Network: main, testnet4, or signet
+network = main
+version_mask = 1fffe000
+
+# PPLNS difficulty multiplier (1.0 = standard window size)
 difficulty_multiplier = 1.0
-# Add a pool signature, if you want. Comment out the line if you want
-# to mine anonymous blocks. This signature is only used to show others
-# how large your pool is, if you are running private, there is no need
-# to add a pool signature. Maximum length 16 bytes.
-pool_signature = "dmpool"
+
+# Pool signature (max 16 bytes, comment out for anonymous mining)
+pool_signature = dmpool
 
 [bitcoinrpc]
-# RPC credentials are loaded from env vars
-url = "http://127.0.0.1:38332"
-username = "p2pool"
-password = "p2pool"
+# RPC credentials
+url = http://127.0.0.1:38332
+username = p2pool
+password = p2pool
 
 [logging]
-# Specify a file path for the log file, if no log file is specified, console logging will be used
-# file = "./logs/p2pool.log"
-# Set a log level. The supported levels are debug, info, warn and error.
-level = "info"
-# Pool, user and worker stats are backed up for aggregates across pool restarts in this directory.
-stats_dir = "./logs/stats"
+# Log file path (comment out for console only)
+# file = ./logs/dmpool.log
+level = info
+stats_dir = ./logs/stats
 
 [api]
-hostname = "0.0.0.0"
+hostname = 0.0.0.0
 port = 46884
-# Optional authentication credentials
-auth_user = "dmpool"
-# auth_token is of the format salt:password-hmac. Use can dmpool_cli gen-auth to generate a token.
-auth_token = "0d74058f74ad3b6768493cedb5e9492b$2a2599d5f4003c291e141762d0e43808cfd932f04a8260e94c375d1574599dbf"
+auth_user = dmpool
+auth_token = 0d74058f74ad3b6768493cedb5e9492ba2599d5f4003c291e141762d0e43808cfd932f04a8260e94c375d1574599dbf
