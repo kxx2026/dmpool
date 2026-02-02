@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DMPool 管理后台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-gray-800 p-4">
+            <h1 class="text-2xl font-bold text-orange-500 mb-8">DMPool Admin</h1>
+
+            <nav class="space-y-2">
+                <a href="#dashboard" onclick="showSection('dashboard')" class="block px-4 py-2 rounded hover:bg-gray-700">📊 仪表盘</a>
+                <a href="#config" onclick="showSection('config')" class="block px-4 py-2 rounded hover:bg-gray-700">⚙️ 配置</a>
+                <a href="#workers" onclick="showSection('workers')" class="block px-4 py-2 rounded hover:bg-gray-700">👷 矿工列表</a>
+                <a href="#payouts" onclick="showSection('payouts')" class="block px-4 py-2 rounded hover:bg-gray-700">💰 收益</a>
+                <a href="#logs" onclick="showSection('logs')" class="block px-4 py-2 rounded hover:bg-gray-700">📜 日志</a>
+            </nav>
+
+            <div class="mt-8 p-4 bg-gray-700 rounded text-sm">
+                <p class="text-gray-400">状态</p>
+                <p id="status" class="text-green-400">● 运行中</p>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-8">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="section">
+                <h2 class="text-3xl font-bold mb-6">矿池仪表盘</h2>
+
+                <!-- Metrics Cards -->
+                <div class="grid grid-cols-4 gap-6 mb-8">
+                    <div class="bg-gray-800 p-6 rounded-lg">
+                        <p class="text-gray-400">总算力</p>
+                        <p id="hashrate" class="text-3xl font-bold text-orange-500">-- TH/s</p>
+                    </div>
+                    <div class="bg-gray-800 p-6 rounded-lg">
+                        <p class="text-gray-400">在线矿工</p>
+                        <p id="workers" class="text-3xl font-bold text-blue-500">--</p>
+                    </div>
+                    <div class="bg-gray-800 p-6 rounded-lg">
+                        <p class="text-gray-400">总份额</p>
+                        <p id="shares" class="text-3xl font-bold text-green-500">--</p>
+                    </div>
+                    <div class="bg-gray-800 p-6 rounded-lg">
+                        <p class="text-gray-400">已挖区块</p>
+                        <p id="blocks" class="text-3xl font-bold text-purple-500">--</p>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="grid grid-cols-2 gap-6">
+                    <div class="bg-gray-800 p-6 rounded-lg">
+                        <h3 class="text-xl font-bold mb-4">算力趋势 (24h)</h3>
+                        <canvas id="hashrateChart"></canvas>
+                    </div>
+                    <div class="bg-gray-800 p-6 rounded-lg">
+                        <h3 class="text-xl font-bold mb-4">份额分布</h3>
+                        <canvas id="sharesChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Config Section -->
+            <section id="config" class="section hidden">
+                <h2 class="text-3xl font-bold mb-6">⚠️ 配置管理</h2>
+
+                <div class="bg-yellow-900/30 border border-yellow-600 p-4 rounded mb-6">
+                    <p class="text-yellow-300">⚠️ 重要：某些配置修改需要重启服务才能生效。请谨慎操作！</p>
+                </div>
+
+                <div class="bg-gray-800 p-6 rounded-lg">
+                    <form id="configForm" class="space-y-6">
+                        <!-- Stratum Config -->
+                        <div>
+                            <h3 class="text-xl font-bold mb-4">Stratum 配置</h3>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-gray-400 mb-2">端口</label>
+                                    <input type="number" id="stratumPort" class="w-full bg-gray-700 rounded px-3 py-2" readonly>
+                                </div>
+                                <div>
+                                    <label class="block text-gray-400 mb-2">监听地址</label>
+                                    <input type="text" id="stratumHost" class="w-full bg-gray-700 rounded px-3 py-2" readonly>
+                                </div>
+                                <div>
+                                    <label class="block text-gray-400 mb-2">初始难度</label>
+                                    <input type="number" id="startDiff" class="w-full bg-gray-700 rounded px-3 py-2">
+                                </div>
+                                <div>
+                                    <label class="block text-gray-400 mb-2">最低难度</label>
+                                    <input type="number" id="minDiff" class="w-full bg-gray-700 rounded px-3 py-2">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PPLNS Config -->
+                        <div>
+                            <h3 class="text-xl font-bold mb-4">PPLNS 配置</h3>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-gray-400 mb-2">TTL (天)</label>
+                                    <input type="number" id="pplnsTtl" class="w-full bg-gray-700 rounded px-3 py-2" readonly>
+                                    <p class="text-xs text-gray-500 mt-1">需要重启修改</p>
+                                </div>
+                                <div>
+                                    <label class="block text-gray-400 mb-2">难度倍数</label>
+                                    <input type="text" id="diffMult" class="w-full bg-gray-700 rounded px-3 py-2" readonly>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pool Config -->
+                        <div>
+                            <h3 class="text-xl font-bold mb-4">矿池配置</h3>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-gray-400 mb-2">网络</label>
+                                    <input type="text" id="network" class="w-full bg-gray-700 rounded px-3 py-2" readonly>
+                                </div>
+                                <div>
+                                    <label class="block text-gray-400 mb-2">矿池签名</label>
+                                    <input type="text" id="signature" class="w-full bg-gray-700 rounded px-3 py-2" maxlength="16">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Critical Settings Warning -->
+                        <div class="bg-red-900/30 border border-red-600 p-4 rounded">
+                            <h4 class="text-red-300 font-bold mb-2">🚨 关键参数状态</h4>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span>ignore_difficulty:</span>
+                                    <span id="ignoreDiffStatus" class="font-bold">检查中...</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>pplns_ttl_days:</span>
+                                    <span id="ttlStatus" class="font-bold">检查中...</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>donation:</span>
+                                    <span id="donationStatus" class="font-bold">检查中...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-4">
+                            <button type="button" onclick="saveConfig()" class="px-6 py-3 bg-orange-600 hover:bg-orange-700 rounded font-bold">
+                                💾 保存配置
+                            </button>
+                            <button type="button" onclick="reloadConfig()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded font-bold">
+                                🔄 重载配置
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Workers Section -->
+            <section id="workers" class="section hidden">
+                <h2 class="text-3xl font-bold mb-6">矿工管理</h2>
+
+                <div class="bg-gray-800 rounded-lg overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-700">
+                            <tr>
+                                <th class="px-4 py-3 text-left">地址</th>
+                                <th class="px-4 py-3 text-left">Worker</th>
+                                <th class="px-4 py-3 text-right">算力 (TH/s)</th>
+                                <th class="px-4 py-3 text-right">份额</th>
+                                <th class="px-4 py-3 text-center">状态</th>
+                                <th class="px-4 py-3 text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="workersList">
+                            <tr>
+                                <td colspan="6" class="px-4 py-8 text-center text-gray-500">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Payouts Section -->
+            <section id="payouts" class="section hidden">
+                <h2 class="text-3xl font-bold mb-6">收益记录</h2>
+
+                <div class="bg-gray-800 p-6 rounded-lg">
+                    <p class="text-gray-400">收益记录功能开发中...</p>
+                    <p class="text-sm text-gray-500 mt-2">将显示：历史区块、Coinbase 交易、收益分配详情</p>
+                </div>
+            </section>
+
+            <!-- Logs Section -->
+            <section id="logs" class="section hidden">
+                <h2 class="text-3xl font-bold mb-6">系统日志</h2>
+
+                <div class="bg-gray-900 p-4 rounded-lg font-mono text-sm h-96 overflow-y-auto" id="logViewer">
+                    <p class="text-green-400">[INFO] Admin panel initialized</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // API Configuration
+        const API_BASE = '/api/admin';
+        let authUser = '';
+        let authToken = '';
+
+        // Get auth from localStorage or prompt
+        function getAuth() {
+            authUser = localStorage.getItem('dmpool_user') || prompt('输入用户名:');
+            authToken = localStorage.getItem('dmpool_token') || prompt('输入认证令牌:');
+            if (authUser && authToken) {
+                localStorage.setItem('dmpool_user', authUser);
+                localStorage.setItem('dmpool_token', authToken);
+            }
+        }
+
+        // Show section
+        function showSection(id) {
+            document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+
+            // Load data for section
+            if (id === 'dashboard') loadDashboard();
+            if (id === 'config') loadConfig();
+            if (id === 'workers') loadWorkers();
+        }
+
+        // API call helper
+        async function apiCall(endpoint, options = {}) {
+            const headers = {
+                'Authorization': 'Basic ' + btoa(authUser + ':' + authToken),
+                ...options.headers
+            };
+            const response = await fetch(API_BASE + endpoint, { ...options, headers });
+            if (!response.ok) throw new Error('API call failed: ' + response.statusText);
+            return response.json();
+        }
+
+        // Load dashboard
+        async function loadDashboard() {
+            try {
+                const data = await apiCall('/dashboard');
+                document.getElementById('hashrate').textContent = data.pool_hashrate_ths.toFixed(2) + ' TH/s';
+                document.getElementById('workers').textContent = data.active_workers;
+                document.getElementById('shares').textContent = data.total_shares.toLocaleString();
+                document.getElementById('blocks').textContent = data.blocks_found;
+
+                addLog('info', 'Dashboard data loaded');
+            } catch (e) {
+                addLog('error', 'Failed to load dashboard: ' + e.message);
+            }
+        }
+
+        // Load config
+        async function loadConfig() {
+            try {
+                const data = await apiCall('/config');
+
+                document.getElementById('stratumPort').value = data.stratum_port;
+                document.getElementById('stratumHost').value = data.stratum_hostname;
+                document.getElementById('startDiff').value = data.start_difficulty;
+                document.getElementById('minDiff').value = data.minimum_difficulty;
+                document.getElementById('pplnsTtl').value = data.pplns_ttl_days;
+                document.getElementById('diffMult').value = data.difficulty_multiplier;
+                document.getElementById('network').value = data.network;
+                document.getElementById('signature').value = data.pool_signature || '';
+
+                // Status indicators
+                const ttlStatus = document.getElementById('ttlStatus');
+                const ignoreStatus = document.getElementById('ignoreDiffStatus');
+                const donationStatus = document.getElementById('donationStatus');
+
+                if (data.pplns_ttl_days >= 7) {
+                    ttlStatus.textContent = '✅ ' + data.pplns_ttl_days + ' 天 (正常)';
+                    ttlStatus.className = 'font-bold text-green-400';
+                } else {
+                    ttlStatus.textContent = '❌ ' + data.pplns_ttl_days + ' 天 (太短!)';
+                    ttlStatus.className = 'font-bold text-red-400';
+                }
+
+                if (data.ignore_difficulty) {
+                    ignoreStatus.textContent = '❌ 已禁用 (危险!)';
+                    ignoreStatus.className = 'font-bold text-red-400';
+                } else {
+                    ignoreStatus.textContent = '✅ 已启用';
+                    ignoreStatus.className = 'font-bold text-green-400';
+                }
+
+                if (data.donation && data.donation > 0) {
+                    donationStatus.textContent = '⚠️ ' + (data.donation / 100) + '%';
+                    donationStatus.className = 'font-bold text-yellow-400';
+                } else {
+                    donationStatus.textContent = '✅ 0% (无捐赠)';
+                    donationStatus.className = 'font-bold text-green-400';
+                }
+
+                addLog('info', 'Config loaded');
+            } catch (e) {
+                addLog('error', 'Failed to load config: ' + e.message);
+            }
+        }
+
+        // Load workers
+        async function loadWorkers() {
+            try {
+                const workers = await apiCall('/workers');
+                const tbody = document.getElementById('workersList');
+
+                if (workers.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">暂无矿工</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = workers.map(w => `
+                    <tr class="border-b border-gray-700">
+                        <td class="px-4 py-3 font-mono text-sm">${w.address.substring(0, 8)}...</td>
+                        <td class="px-4 py-3">${w.worker_name || '-'}</td>
+                        <td class="px-4 py-3 text-right">${w.hashrate_ths.toFixed(2)}</td>
+                        <td class="px-4 py-3 text-right">${w.shares_count.toLocaleString()}</td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="px-2 py-1 rounded text-xs ${w.is_banned ? 'bg-red-600' : 'bg-green-600'}">
+                                ${w.is_banned ? '已封禁' : '正常'}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <button onclick="banWorker('${w.address}')" class="text-red-400 hover:text-red-300">
+                                ${w.is_banned ? '解禁' : '封禁'}
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+
+                addLog('info', 'Workers loaded: ' + workers.length);
+            } catch (e) {
+                addLog('error', 'Failed to load workers: ' + e.message);
+            }
+        }
+
+        // Save config
+        async function saveConfig() {
+            try {
+                const update = {
+                    start_difficulty: parseInt(document.getElementById('startDiff').value),
+                    minimum_difficulty: parseInt(document.getElementById('minDiff').value),
+                    pool_signature: document.getElementById('signature').value || null
+                };
+
+                await apiCall('/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(update)
+                });
+
+                addLog('success', 'Configuration saved (runtime only, restart for persistence)');
+                alert('配置已保存！注意：仅为运行时更新，重启后恢复。');
+            } catch (e) {
+                addLog('error', 'Failed to save config: ' + e.message);
+                alert('保存失败: ' + e.message);
+            }
+        }
+
+        // Reload config
+        async function reloadConfig() {
+            if (!confirm('确定要重载配置吗？这将重启矿池服务。')) return;
+
+            try {
+                await apiCall('/reload');
+                addLog('success', 'Config reload triggered');
+                alert('配置重载已触发，服务将重启...');
+            } catch (e) {
+                addLog('error', 'Failed to reload: ' + e.message);
+            }
+        }
+
+        // Add log to viewer
+        function addLog(type, message) {
+            const viewer = document.getElementById('logViewer');
+            const time = new Date().toLocaleTimeString();
+            const color = {
+                info: 'text-blue-400',
+                success: 'text-green-400',
+                error: 'text-red-400',
+                warn: 'text-yellow-400'
+            }[type] || 'text-gray-400';
+
+            viewer.innerHTML = `<p class="${color}">[${time}] [${type.toUpperCase()}] ${message}</p>` + viewer.innerHTML;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            getAuth();
+            showSection('dashboard');
+
+            // Auto-refresh every 30 seconds
+            setInterval(() => {
+                const currentSection = document.querySelector('.section:not(.hidden)');
+                if (currentSection && currentSection.id === 'dashboard') {
+                    loadDashboard();
+                }
+            }, 30000);
+        });
+    </script>
+</body>
+</html>
