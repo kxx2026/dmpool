@@ -1079,9 +1079,11 @@ name = "dmpool"
 version = "2.4.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "bitcoin",
  "bitcoindrpc",
+ "chrono",
  "clap",
  "p2poolv2_api",
  "p2poolv2_cli",
@@ -1089,6 +1091,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-test",
  "tracing",
