@@ -90,3 +90,8 @@ assets = [
 conf-files = ["/etc/dmpool/config.toml"]
 maintainer-scripts = "packages/debian/"
 systemd-units = { enable = false }
+
+[[bin]]
+name = "dmpool_admin"
+test = false
+bench = false
