@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License along with
 // Hydra-Pool. If not, see <https://www.gnu.org/licenses/>.
 
+mod migration;
+
 use clap::Parser;
 use p2poolv2_api::start_api_server;
 use p2poolv2_lib::accounting::stats::metrics;
@@ -39,7 +41,7 @@ use tracing::info;
 use tracing::warn;
 
 /// Interval in seconds to poll for new block templates since the last zmq signal
-const GBT_POLL_INTERVAL: u64 = 10; // seconds
+const GBT_POLL_INTERVAL: u64 = 10;
 
 /// Maximum number of pending shares from all clients connected to stratum server
 const STRATUM_SHARES_BUFFER_SIZE: usize = 1000;
@@ -53,7 +55,6 @@ const FULL_DONATION_BIPS: u16 = 10_000;
 const NOTIFY_CHANNEL_CAPACITY: usize = 1000;
 
 /// Wait for shutdown signals (Ctrl+C, SIGTERM on Unix) or internal shutdown signal.
-/// Returns when any shutdown signal is received.
 #[cfg(unix)]
 async fn wait_for_shutdown_signal(stopping_rx: oneshot::Receiver<()>) {
     match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
@@ -71,7 +72,6 @@ async fn wait_for_shutdown_signal(stopping_rx: oneshot::Receiver<()>) {
             }
         }
         Err(e) => {
-            // If we cannot set up signal handler, at least wait for Ctrl+C and internal signal
             warn!("Failed to set up SIGTERM handler: {}. Only Ctrl+C will be monitored.", e);
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
@@ -86,7 +86,6 @@ async fn wait_for_shutdown_signal(stopping_rx: oneshot::Receiver<()>) {
 }
 
 /// Wait for shutdown signals (Ctrl+C) or internal shutdown signal.
-/// Returns when any shutdown signal is received.
 #[cfg(not(unix))]
 async fn wait_for_shutdown_signal(stopping_rx: oneshot::Receiver<()>) {
     tokio::select! {
@@ -109,11 +108,9 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), String> {
     info!("Starting DMPool...");
-    
-    // Parse command line arguments
+
     let args = Args::parse();
 
-    // Load configuration
     let config = match Config::load(&args.config) {
         Ok(cfg) => cfg,
         Err(e) => {
@@ -122,22 +119,19 @@ async fn main() -> Result<(), String> {
         }
     };
 
-    // Configure logging based on config
     let _guard = match setup_logging(&config.logging) {
         Ok(guard) => {
             info!("Logging set up successfully");
             guard
         }
         Err(e) => {
-            // Logging setup failed, but we can continue with stderr output
             eprintln!("Failed to set up logging: {}. Continuing with stderr output.", e);
             return Err(format!("Failed to set up logging: {}", e));
         }
     };
 
     let genesis = ShareBlock::build_genesis_for_network(config.stratum.network);
-    
-    // Initialize store with proper error handling
+
     let store = match Store::new(config.store.path.clone(), false) {
         Ok(s) => Arc::new(s),
         Err(e) => {
@@ -145,7 +139,19 @@ async fn main() -> Result<(), String> {
             return Err(format!("Database initialization failed: {}", e));
         }
     };
-    
+
+    // Run database migrations
+    info!("Running database migrations...");
+    match migration::setup_migrations(store.clone()).await {
+        Ok(version) => {
+            info!("Database migrations complete. Schema version: {}", version);
+        }
+        Err(e) => {
+            error!("Migration failed: {}", e);
+            return Err(format!("Migration failed: {}", e));
+        }
+    }
+
     let chain_store = Arc::new(ChainStore::new(
         store.clone(),
         genesis,
@@ -163,7 +169,6 @@ async fn main() -> Result<(), String> {
         Duration::from_secs(config.store.pplns_ttl_days * 3600 * 24),
     );
 
-    // Parse stratum config with proper error handling
     let stratum_config = match config.stratum.clone().parse() {
         Ok(cfg) => cfg,
         Err(e) => {
@@ -179,8 +184,7 @@ async fn main() -> Result<(), String> {
 
     let notify_tx_for_gbt = notify_tx.clone();
     let bitcoinrpc_config_cloned = bitcoinrpc_config.clone();
-    
-    // Setup ZMQ publisher for block notifications
+
     let zmq_trigger_rx = match ZmqListener.start(&stratum_config.zmqpubhashblock) {
         Ok(rx) => rx,
         Err(e) => {
@@ -239,7 +243,6 @@ async fn main() -> Result<(), String> {
     let store_for_stratum = chain_store.clone();
     let tracker_handle_cloned = tracker_handle.clone();
 
-    // Build and start stratum server with proper error handling
     let stratum_server_result = StratumServerBuilder::default()
         .shutdown_rx(stratum_shutdown_rx)
         .connections_handle(connections_handle.clone())
@@ -313,12 +316,10 @@ async fn main() -> Result<(), String> {
 
             info!("Node shutting down ...");
 
-            // Shutdown node first to stop accepting new work
             if let Err(e) = node_handle.shutdown().await {
                 error!("Error during node shutdown: {}", e);
             }
 
-            // Save metrics before shutdown to prevent data loss
             let metrics = metrics_for_shutdown.get_metrics().await;
             if let Err(e) = p2poolv2_lib::accounting::stats::pool_local_stats::save_pool_local_stats(
                 &metrics,
@@ -329,7 +330,6 @@ async fn main() -> Result<(), String> {
                 info!("Metrics saved on shutdown");
             }
 
-            // Send shutdown signals - log errors but dont panic
             if let Err(_) = stratum_shutdown_tx.send(()) {
                 warn!("Failed to send shutdown signal to Stratum server (may already be shut down)");
             }
