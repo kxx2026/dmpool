@@ -229,14 +229,19 @@ impl HealthChecker {
                     },
                 };
 
-                // Calculate sync progress
-                let sync_progress = if blockchain.headers > 0 {
-                    blockchain.blocks as f64 / blockchain.headers as f64
-                } else {
-                    1.0
-                };
+                // Calculate sync progress more accurately
+                // verification_progress from Bitcoin RPC is more reliable than blocks/headers ratio
+                let sync_progress = blockchain.verification_progress.max(0.0).min(1.0);
 
-                let status = if blockchain.initial_block_download || sync_progress < 0.999 {
+                // Check if actually syncing (need both conditions)
+                let is_syncing = blockchain.initial_block_download ||
+                    (blockchain.blocks < blockchain.headers) ||
+                    (blockchain.blocks == 0 && blockchain.headers == 0);  // Not started yet
+
+                let status = if is_syncing {
+                    "syncing"
+                } else if network.connections == 0 {
+                    "degraded"
                     "syncing"
                 } else if network.connections == 0 {
                     "degraded"
@@ -244,10 +249,12 @@ impl HealthChecker {
                     "healthy"
                 };
 
-                let message = if blockchain.initial_block_download {
+                let message = if network.connections == 0 {
+                    "等待连接 peers...".to_string()
+                } else if blockchain.initial_block_download {
                     format!("同步中... {}/{} ({:.1}%)",
                         blockchain.blocks,
-                        blockchain.headers,
+                        blockchain.headers.max(1),
                         sync_progress * 100.0
                     )
                 } else if sync_progress >= 0.999 {
