@@ -242,9 +242,6 @@ impl HealthChecker {
                     "syncing"
                 } else if network.connections == 0 {
                     "degraded"
-                    "syncing"
-                } else if network.connections == 0 {
-                    "degraded"
                 } else {
                     "healthy"
                 };
