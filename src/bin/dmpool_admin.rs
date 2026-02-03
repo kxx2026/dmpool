@@ -347,8 +347,9 @@ async fn main() -> Result<()> {
         .with_state(state)
         .fallback(not_found);
 
-    // Start server
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
+    // Start server - bind to localhost only for security
+    // Access via Tailscale (100.117.220.21:8080) or SSH tunnel
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
     info!("DMPool Admin Server listening on port {}", port);
     info!("Access admin panel at http://localhost:{}", port);
     info!("Default credentials: {} / {}", admin_username, "***");

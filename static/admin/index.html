@@ -130,10 +130,6 @@
                     </span>
                 </button>
             </form>
-
-            <p class="mt-6 text-center text-sm text-gray-500">
-                默认账号: <span class="text-gray-400">admin</span> / <span class="text-gray-400">admin123</span>
-            </p>
         </div>
     </div>
 
@@ -394,8 +390,8 @@
 
                 const data = await response.json();
 
-                if (response.ok && data.data) {
-                    authToken = data.data.token;
+                if (response.ok && data.token) {
+                    authToken = data.token;
                     localStorage.setItem('dmpool_token', authToken);
                     showMainContent();
                 } else {
