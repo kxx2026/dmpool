@@ -1,0 +1,35 @@
+# DMPool Local Test Configuration
+
+[store]
+path = "/tmp/dmpool_test.db"
+background_task_frequency_hours = 24
+pplns_ttl_days = 7
+
+[stratum]
+hostname = "0.0.0.0"
+port = 3333
+start_difficulty = 32
+minimum_difficulty = 16
+bootstrap_address = "tb1qce93hy5rhg02s6aeu7mfdvxg76x66pqqyh5tlf"
+ignore_difficulty = false
+zmqpubhashblock = "tcp://127.0.0.1:28334"
+network = "signet"
+version_mask = "1fffe000"
+difficulty_multiplier = 1.0
+pool_signature = "dmpool-test"
+
+[bitcoinrpc]
+url = "http://127.0.0.1:38332"
+username = "p2pool"
+password = "p2pool"
+
+[logging]
+file = "/tmp/dmpool.log"
+level = "info"
+stats_dir = "/tmp/dmpool-stats"
+
+[api]
+hostname = "0.0.0.0"
+port = 46884
+auth_user = "dmpool"
+auth_token = "0d74058f74ad3b6768493cedb5e9492ba2599d5f4003c291e141762d0e43808cfd932f04a8260e94c375d1574599dbf"

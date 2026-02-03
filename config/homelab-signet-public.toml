@@ -1,0 +1,42 @@
+# DMPool Configuration for Homelab Testing
+# Using public signet node for initial testing
+
+[store]
+path = "/home/k0n9/dmpool/data/store.db"
+background_task_frequency_hours = 24
+pplns_ttl_days = 7
+
+[stratum]
+hostname = "0.0.0.0"
+port = 3333
+start_difficulty = 32
+minimum_difficulty = 16
+
+bootstrap_address = "bc1qce93hy5rhg02s6aeu7mfdvxg76x66pqqtrvzs3"
+
+ignore_difficulty = false
+
+# Using public signet node (for testing only)
+zmqpubhashblock = "tcp://signet.bitcoinstack.net:28334"
+
+network = "signet"
+version_mask = "1fffe000"
+difficulty_multiplier = 1.0
+pool_signature = "dmpool-test"
+
+[bitcoinrpc]
+# Public signet RPC endpoint (for testing)
+url = "http://signet.bitcoinstack.net:38332"
+username = ""
+password = ""
+
+[logging]
+file = "/home/k0n9/dmpool/logs/dmpool.log"
+level = "info"
+stats_dir = "/home/k0n9/dmpool/logs/stats"
+
+[api]
+hostname = "0.0.0.0"
+port = 46884
+auth_user = "dmpool"
+auth_token = "0d74058f74ad3b6768493cedb5e9492ba2599d5f4003c291e141762d0e43808cfd932f04a8260e94c375d1574599dbf"

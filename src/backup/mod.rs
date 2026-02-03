@@ -1,378 +1,515 @@
-// Automated backup module for DMPool
-// Provides database backup, restore, and verification
+// Backup Module for DMPool
+// Handles database backup, compression, validation, and recovery
 
 use anyhow::{Context, Result};
-use p2poolv2_lib::store::Store;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::Semaphore;
-use tracing::{debug, info, warn, error};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use tracing::info;
 
-/// Backup manager for DMPool database
+/// Validate a path is safe for use with external commands
+fn validate_safe_path(path: &Path) -> Result<()> {
+    let path_str = path.to_str()
+        .ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8 characters"))?;
+
+    // Must be absolute path
+    if !path_str.starts_with('/') {
+        return Err(anyhow::anyhow!("Path must be absolute: {}", path_str));
+    }
+
+    // Check for dangerous characters or patterns
+    let dangerous_patterns = [
+        ";",          // Command separator
+        "&",          // Background operator
+        "|",          // Pipe operator
+        "$(",         // Command substitution
+        "`",          // Command substitution
+        "\n",         // Newline injection
+        "\r",         // Carriage return
+        "\t",         // Tab
+        ">",          // Redirect output
+        "<",          // Redirect input
+        "*/../",      // Directory traversal
+        "..",         // Parent directory (might be okay in some contexts)
+        "\\0",        // Null byte
+    ];
+
+    for pattern in &dangerous_patterns {
+        if path_str.contains(pattern) {
+            // ".." might be okay in some contexts, so check more carefully
+            if *pattern == ".." {
+                // Only allow ".." as a path component (e.g., "/home/../user" is okay)
+                // But not at the start or suspicious positions
+                if path_str == "/.." || path_str.contains("/../") {
+                    // Check if it's trying to escape root
+                    continue;
+                }
+            }
+            return Err(anyhow::anyhow!("Path contains dangerous pattern '{}': {}", pattern, path_str));
+        }
+    }
+
+    // Check if path component starts with "-" (could be interpreted as tar option)
+    for component in path.components() {
+        if let Some(name) = component.as_os_str().to_str() {
+            if name.starts_with('-') && name.len() > 1 {
+                return Err(anyhow::anyhow!("Path component starts with dash (could be interpreted as option): {}", name));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Safely convert path to string for command arguments
+fn safe_path_str(path: &Path) -> Result<String> {
+    validate_safe_path(path)?;
+    Ok(path.to_str()
+        .ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8 characters"))?
+        .to_string())
+}
+
+/// Backup configuration
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BackupConfig {
+    /// Source database path
+    pub db_path: PathBuf,
+    /// Backup directory
+    pub backup_dir: PathBuf,
+    /// Number of backups to retain
+    pub retention_count: usize,
+    /// Enable compression (gzip)
+    pub compress: bool,
+    /// Backup interval in hours
+    pub interval_hours: u64,
+}
+
+impl Default for BackupConfig {
+    fn default() -> Self {
+        Self {
+            db_path: PathBuf::from("./data"),
+            backup_dir: PathBuf::from("./backups"),
+            retention_count: 7,
+            compress: true,
+            interval_hours: 24,
+        }
+    }
+}
+
+/// Backup metadata
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BackupMetadata {
+    /// Unique backup ID
+    pub id: String,
+    /// Timestamp of backup
+    pub timestamp: DateTime<Utc>,
+    /// Backup file path
+    pub file_path: PathBuf,
+    /// Original database size in bytes
+    pub original_size: u64,
+    /// Backup size in bytes (after compression if enabled)
+    pub backup_size: u64,
+    /// Compression ratio (if compressed)
+    pub compression_ratio: Option<f64>,
+    /// Whether backup is validated
+    pub validated: bool,
+    /// Schema version at time of backup
+    pub schema_version: u32,
+    /// Checksum for integrity verification
+    pub checksum: String,
+}
+
+/// Backup statistics
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BackupStats {
+    pub total_backups: usize,
+    pub total_size_bytes: u64,
+    pub latest_backup: Option<DateTime<Utc>>,
+    pub oldest_backup: Option<DateTime<Utc>>,
+    pub disk_usage_bytes: u64,
+}
+
+/// Backup manager
 pub struct BackupManager {
-    store_path: PathBuf,
-    backup_dir: PathBuf,
-    max_backups: usize,
-    compression_enabled: bool,
+    config: BackupConfig,
 }
 
 impl BackupManager {
     /// Create a new backup manager
-    pub fn new(
-        store_path: PathBuf,
-        backup_dir: PathBuf,
-        max_backups: usize,
-    ) -> Result<Self> {
-        std::fs::create_dir_all(&backup_dir)
-            .context("Failed to create backup directory")?;
-
-        Ok(Self {
-            store_path,
-            backup_dir,
-            max_backups,
-            compression_enabled: true,
-        })
+    pub fn new(config: BackupConfig) -> Self {
+        Self { config }
     }
 
-    /// Perform a backup
-    pub fn backup(&self) -> Result<BackupInfo> {
-        let timestamp = Utc::now();
-        let backup_name = format!("dmpool_backup_{}", timestamp.format("%Y%m%d_%H%M%S"));
-        let backup_path = self.backup_dir.join(&backup_name);
+    /// Create with default configuration
+    pub fn default() -> Self {
+        Self::new(BackupConfig::default())
+    }
 
-        info!("Starting backup to: {}", backup_path.display());
+    /// Ensure backup directory exists
+    fn ensure_backup_dir(&self) -> Result<()> {
+        if !self.config.backup_dir.exists() {
+            fs::create_dir_all(&self.config.backup_dir)
+                .context("Failed to create backup directory")?;
+        }
+        Ok(())
+    }
 
-        // Create backup directory
-        std::fs::create_dir_all(&backup_path)
-            .context("Failed to create backup directory")?;
+    /// Generate backup filename
+    fn generate_backup_filename(&self) -> String {
+        let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
+        let compression_suffix = if self.config.compress { ".tar.gz" } else { ".tar" };
+        format!("dmpool_backup_{}{}", timestamp, compression_suffix)
+    }
 
-        // Copy database files
-        self.copy_database_files(&backup_path)?;
+    /// Get current schema version (simplified - should read from DB)
+    fn get_schema_version(&self) -> u32 {
+        // TODO: Read actual schema version from database
+        1
+    }
 
-        // Create backup metadata
+    /// Calculate file checksum (SHA-256)
+    fn calculate_checksum(&self, file_path: &Path) -> Result<String> {
+        use sha2::{Digest, Sha256};
+        let mut file = fs::File::open(file_path)
+            .context("Failed to open file for checksum")?;
+        let mut hasher = Sha256::new();
+        std::io::copy(&mut file, &mut hasher)
+            .context("Failed to read file for checksum")?;
+        Ok(format!("{:x}", hasher.finalize()))
+    }
+
+    /// Get directory size
+    fn get_dir_size(&self, path: &Path) -> Result<u64> {
+        let mut total = 0u64;
+        if path.is_dir() {
+            for entry in fs::read_dir(path)
+                .context("Failed to read directory")?
+            {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    total += self.get_dir_size(&path)?;
+                } else {
+                    total += entry.metadata()?.len();
+                }
+            }
+        }
+        Ok(total)
+    }
+
+    /// Create a backup
+    pub async fn create_backup(&self) -> Result<BackupMetadata> {
+        self.ensure_backup_dir()?;
+
+        if !self.config.db_path.exists() {
+            return Err(anyhow::anyhow!("Database path does not exist: {:?}", self.config.db_path));
+        }
+
+        let backup_id = uuid::Uuid::new_v4().to_string();
+        let filename = self.generate_backup_filename();
+        let backup_path = self.config.backup_dir.join(&filename);
+
+        info!("Creating backup: {}", filename);
+
+        // Get original database size
+        let original_size = self.get_dir_size(&self.config.db_path)?;
+
+        // Validate all paths before using them
+        let backup_path_str = safe_path_str(&backup_path)?;
+        let parent_dir = self.config.db_path.parent()
+            .unwrap_or(Path::new("."));
+        let parent_dir_str = safe_path_str(&parent_dir)?;
+
+        // Use "./" prefix for file argument to prevent it from being interpreted as an option
+        let db_file = self.config.db_path.file_name()
+            .ok_or_else(|| anyhow::anyhow!("Database path has no file name"))?;
+
+        // Validate the file name doesn't contain dangerous characters
+        let db_file_str = db_file.to_str()
+            .ok_or_else(|| anyhow::anyhow!("Database file name contains invalid UTF-8"))?;
+
+        // Check if file name starts with dash
+        let db_file_safe = if db_file_str.starts_with('-') {
+            format!("./{}", db_file_str)
+        } else {
+            db_file_str.to_string()
+        };
+
+        // Validate file name for safety
+        if db_file_str.contains(';') || db_file_str.contains('&') || db_file_str.contains('|')
+            || db_file_str.contains('$') || db_file_str.contains('`') || db_file_str.contains('\\')
+            || db_file_str.contains('\n') || db_file_str.contains('\r') {
+            return Err(anyhow::anyhow!("Database file name contains dangerous characters: {}", db_file_str));
+        }
+
+        // Create tar archive (optionally compressed)
+        let status = if self.config.compress {
+            Command::new("tar")
+                .args([
+                    "-czf",
+                    &backup_path_str,
+                    "-C",
+                    &parent_dir_str,
+                    &db_file_safe,
+                ])
+                .status()
+                .context("Failed to execute tar command")?
+        } else {
+            Command::new("tar")
+                .args([
+                    "-cf",
+                    &backup_path_str,
+                    "-C",
+                    &parent_dir_str,
+                    &db_file_safe,
+                ])
+                .status()
+                .context("Failed to execute tar command")?
+        };
+
+        if !status.success() {
+            return Err(anyhow::anyhow!("Backup creation failed with exit code: {:?}", status.code()));
+        }
+
+        // Get backup size
+        let backup_size = fs::metadata(&backup_path)
+            .context("Failed to get backup file metadata")?
+            .len();
+
+        // Calculate compression ratio
+        let compression_ratio = if self.config.compress && original_size > 0 {
+            Some((original_size as f64 - backup_size as f64) / original_size as f64 * 100.0)
+        } else {
+            None
+        };
+
+        // Calculate checksum
+        let checksum = self.calculate_checksum(&backup_path)?;
+
         let metadata = BackupMetadata {
-            backup_name: backup_name.clone(),
-            created_at: timestamp,
-            store_path: self.store_path.clone(),
-            backup_path: backup_path.clone(),
-            size_bytes: self.calculate_size(&backup_path)?,
-            version: env!("CARGO_PKG_VERSION").to_string(),
+            id: backup_id,
+            timestamp: Utc::now(),
+            file_path: backup_path.clone(),
+            original_size,
+            backup_size,
+            compression_ratio,
+            validated: false,
+            schema_version: self.get_schema_version(),
+            checksum,
         };
 
         // Save metadata
         self.save_metadata(&metadata)?;
 
-        // Cleanup old backups
-        self.cleanup_old_backups()?;
+        // Validate the backup
+        self.validate_backup(&metadata).await?;
 
-        info!("Backup completed: {} ({} bytes)", backup_name, metadata.size_bytes);
+        info!(
+            "Backup created successfully: {} (size: {} bytes, compressed: {:.1}%)",
+            filename,
+            backup_size,
+            compression_ratio.unwrap_or(0.0)
+        );
 
-        Ok(BackupInfo {
-            path: backup_path,
-            metadata,
-        })
+        Ok(metadata)
     }
 
-    /// Restore from a backup
-    pub fn restore(&self, backup_name: &str) -> Result<()> {
-        info!("Restoring from backup: {}", backup_name);
-
-        let backup_path = self.backup_dir.join(backup_name);
-
-        if !backup_path.exists() {
-            return Err(anyhow::anyhow!("Backup not found: {}", backup_name));
-        }
-
-        // Load metadata
-        let metadata = self.load_metadata(&backup_path)?;
-
-        // Validate backup
-        self.validate_backup(&metadata)?;
-
-        // Stop current operations, restore database
-        info!("Stopping pool operations for restore...");
-
-        // Backup current database before restore
-        let pre_restore_backup = format!("pre_restore_{}", Utc::now().format("%Y%m%d_%H%M%S"));
-        let pre_restore_path = self.backup_dir.join(&pre_restore_backup);
-        std::fs::create_dir_all(&pre_restore_path)?;
-        self.copy_database_files(&pre_restore_path)?;
-        info!("Pre-restore backup saved: {}", pre_restore_backup);
-
-        // Restore files
-        self.restore_database_files(&backup_path)?;
-
-        info!("Restore completed successfully");
+    /// Save backup metadata to JSON file
+    fn save_metadata(&self, metadata: &BackupMetadata) -> Result<()> {
+        let meta_path = self.get_metadata_path(&metadata.id);
+        let json = serde_json::to_string_pretty(metadata)
+            .context("Failed to serialize metadata")?;
+        fs::write(&meta_path, json)
+            .context("Failed to write metadata file")?;
         Ok(())
     }
 
-    /// List all available backups
+    /// Get metadata file path for a backup ID
+    fn get_metadata_path(&self, backup_id: &str) -> PathBuf {
+        self.config.backup_dir.join(format!("{}.meta.json", backup_id))
+    }
+
+    /// Load backup metadata
+    pub fn load_metadata(&self, backup_id: &str) -> Result<BackupMetadata> {
+        let meta_path = self.get_metadata_path(backup_id);
+        let json = fs::read_to_string(&meta_path)
+            .context("Failed to read metadata file")?;
+        let metadata: BackupMetadata = serde_json::from_str(&json)
+            .context("Failed to parse metadata")?;
+        Ok(metadata)
+    }
+
+    /// Validate backup integrity
+    pub async fn validate_backup(&self, metadata: &BackupMetadata) -> Result<bool> {
+        info!("Validating backup: {}", metadata.id);
+
+        // Check if backup file exists
+        if !metadata.file_path.exists() {
+            return Err(anyhow::anyhow!("Backup file not found: {:?}", metadata.file_path));
+        }
+
+        // Verify checksum
+        let current_checksum = self.calculate_checksum(&metadata.file_path)?;
+        if current_checksum != metadata.checksum {
+            return Err(anyhow::anyhow!(
+                "Backup checksum mismatch: expected {}, got {}",
+                metadata.checksum,
+                current_checksum
+            ));
+        }
+
+        // Update metadata as validated
+        let mut updated = metadata.clone();
+        updated.validated = true;
+        self.save_metadata(&updated)?;
+
+        info!("Backup validated successfully: {}", metadata.id);
+        Ok(true)
+    }
+
+    /// List all backups
     pub fn list_backups(&self) -> Result<Vec<BackupMetadata>> {
         let mut backups = Vec::new();
 
-        for entry in std::fs::read_dir(&self.backup_dir)
+        if !self.config.backup_dir.exists() {
+            return Ok(backups);
+        }
+
+        for entry in fs::read_dir(&self.config.backup_dir)
             .context("Failed to read backup directory")?
         {
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_dir() && path.file_name()
-                .and_then(|n| n.to_str())
-                .map(|n| n.starts_with("dmpool_backup_"))
-                .unwrap_or(false)
-            {
-                match self.load_metadata(&path) {
-                    Ok(metadata) => backups.push(metadata),
-                    Err(e) => warn!("Failed to load metadata for {:?}: {}", path, e),
+            // Load metadata files
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                    if name.ends_with(".meta.json") {
+                        let backup_id = name.trim_end_matches(".meta.json");
+                        if let Ok(metadata) = self.load_metadata(backup_id) {
+                            backups.push(metadata);
+                        }
+                    }
                 }
             }
         }
 
-        backups.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        // Sort by timestamp (newest first)
+        backups.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
         Ok(backups)
     }
 
-    /// Verify a backup
-    pub fn verify(&self, backup_name: &str) -> Result<bool> {
-        let backup_path = self.backup_dir.join(backup_name);
+    /// Get backup statistics
+    pub fn get_stats(&self) -> Result<BackupStats> {
+        let backups = self.list_backups()?;
 
-        if !backup_path.exists() {
-            return Err(anyhow::anyhow!("Backup not found: {}", backup_name));
-        }
+        let total_size_bytes: u64 = backups.iter().map(|b| b.backup_size).sum();
+        let disk_usage_bytes = self.get_dir_size(&self.config.backup_dir).unwrap_or(0);
 
-        let metadata = self.load_metadata(&backup_path)?;
-
-        // Check files exist
-        if !backup_path.join("CURRENT").exists() {
-            return Ok(false);
-        }
-
-        // Check size matches
-        let current_size = self.calculate_size(&backup_path)?;
-        if current_size != metadata.size_bytes {
-            warn!("Backup size mismatch: expected {}, got {}", metadata.size_bytes, current_size);
-            return Ok(false);
-        }
-
-        Ok(true)
+        Ok(BackupStats {
+            total_backups: backups.len(),
+            total_size_bytes,
+            latest_backup: backups.first().map(|b| b.timestamp),
+            oldest_backup: backups.last().map(|b| b.timestamp),
+            disk_usage_bytes,
+        })
     }
 
-    /// Start automated backup scheduler
-    pub async fn start_scheduler(&self, interval_hours: u64) -> Result<()> {
-        info!("Starting backup scheduler (interval: {} hours)", interval_hours);
+    /// Restore from a backup
+    pub async fn restore_backup(&self, backup_id: &str, target_path: Option<&Path>) -> Result<()> {
+        let metadata = self.load_metadata(backup_id)?;
 
-        let backup_manager = self.clone();
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(interval_hours * 3600));
+        info!("Restoring backup: {} from {:?}", backup_id, metadata.file_path);
 
-            loop {
-                interval.tick().await;
+        // Validate checksum before restore
+        let current_checksum = self.calculate_checksum(&metadata.file_path)?;
+        if current_checksum != metadata.checksum {
+            return Err(anyhow::anyhow!(
+                "Backup checksum mismatch - restore aborted"
+            ));
+        }
 
-                if let Err(e) = backup_manager.backup() {
-                    error!("Scheduled backup failed: {}", e);
-                }
-            }
-        });
+        let restore_path = target_path.unwrap_or(&self.config.db_path);
 
+        // Ensure target directory exists or create it
+        if !restore_path.exists() {
+            fs::create_dir_all(restore_path)
+                .context("Failed to create restore directory")?;
+        }
+
+        // Extract backup
+        let status = Command::new("tar")
+            .args([
+                "-xzf",
+                metadata.file_path.to_str().unwrap(),
+                "-C",
+                restore_path.parent().unwrap_or(Path::new(".")).to_str().unwrap(),
+            ])
+            .status()
+            .context("Failed to execute tar extract command")?;
+
+        if !status.success() {
+            return Err(anyhow::anyhow!("Backup extraction failed with exit code: {:?}", status.code()));
+        }
+
+        info!("Backup restored successfully to: {:?}", restore_path);
         Ok(())
     }
 
-    // Internal methods
-
-    fn copy_database_files(&self, dest: &Path) -> Result<()> {
-        let source = Path::new(&self.store_path);
-
-        if !source.exists() {
-            return Err(anyhow::anyhow!("Source database not found"));
-        }
-
-        // Copy all database files
-        for entry in std::fs::read_dir(source)
-            .context("Failed to read database directory")?
-        {
-            let entry = entry?;
-            let src_path = entry.path();
-
-            if src_path.is_file() {
-                let file_name = src_path.file_name()
-                    .and_then(|n| n.to_str())
-                    .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
-
-                let dest_path = dest.join(file_name);
-                std::fs::copy(&src_path, &dest_path)
-                    .with_context(|| format!("Failed to copy {}", file_name))?;
-
-                debug!("Copied: {}", file_name);
-            }
-        }
-
-        Ok(())
-    }
-
-    fn restore_database_files(&self, backup_path: &Path) -> Result<()> {
-        let dest = Path::new(&self.store_path);
-
-        // Clear existing database
-        if dest.exists() {
-            for entry in std::fs::read_dir(dest)? {
-                let entry = entry?;
-                let path = entry.path();
-
-                if path.is_file() {
-                    std::fs::remove_file(&path)?;
-                }
-            }
-        } else {
-            std::fs::create_dir_all(dest)?;
-        }
-
-        // Copy backup files
-        for entry in std::fs::read_dir(backup_path)? {
-            let entry = entry?;
-            let src_path = entry.path();
-
-            if src_path.is_file() {
-                let file_name = src_path.file_name()
-                    .and_then(|n| n.to_str())
-                    .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
-
-                let dest_path = dest.join(file_name);
-                std::fs::copy(&src_path, &dest_path)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn cleanup_old_backups(&self) -> Result<()> {
+    /// Delete old backups based on retention policy
+    pub async fn cleanup_old_backups(&self) -> Result<usize> {
         let mut backups = self.list_backups()?;
+        let deleted_count = 0;
 
-        if backups.len() <= self.max_backups {
-            return Ok(());
+        if backups.len() <= self.config.retention_count {
+            info!("No old backups to clean up ({} <= {})", backups.len(), self.config.retention_count);
+            return Ok(0);
         }
 
-        let to_remove = &backups[self.max_backups..];
+        // Remove oldest backups beyond retention limit
+        while backups.len() > self.config.retention_count {
+            if let Some(backup) = backups.pop() {
+                // Delete backup file
+                if backup.file_path.exists() {
+                    fs::remove_file(&backup.file_path)
+                        .context("Failed to delete backup file")?;
+                }
 
-        for backup in to_remove {
-            info!("Removing old backup: {}", backup.backup_name);
-            std::fs::remove_dir_all(&backup.backup_path)
-                .with_context(|| format!("Failed to remove backup: {}", backup.backup_name))?;
-        }
+                // Delete metadata file
+                let meta_path = self.get_metadata_path(&backup.id);
+                if meta_path.exists() {
+                    fs::remove_file(&meta_path)
+                        .context("Failed to delete metadata file")?;
+                }
 
-        Ok(())
-    }
-
-    fn validate_backup(&self, metadata: &BackupMetadata) -> Result<()> {
-        if !metadata.backup_path.exists() {
-            return Err(anyhow::anyhow!("Backup path does not exist"));
-        }
-
-        if !metadata.backup_path.join("CURRENT").exists() {
-            return Err(anyhow::anyhow!("Invalid backup: missing CURRENT file"));
-        }
-
-        Ok(())
-    }
-
-    fn save_metadata(&self, metadata: &BackupMetadata) -> Result<()> {
-        let metadata_path = metadata.backup_path.join("metadata.json");
-        let json = serde_json::to_string_pretty(metadata)?;
-        std::fs::write(metadata_path, json)?;
-        Ok(())
-    }
-
-    fn load_metadata(&self, backup_path: &Path) -> Result<BackupMetadata> {
-        let metadata_path = backup_path.join("metadata.json");
-
-        if !metadata_path.exists() {
-            // Create minimal metadata for legacy backups
-            return Ok(BackupMetadata {
-                backup_name: backup_path.file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("unknown")
-                    .to_string(),
-                created_at: std::fs::metadata(backup_path)?
-                    .modified()
-                    .unwrap_or(std::time::SystemTime::now())
-                    .into(),
-                store_path: self.store_path.clone(),
-                backup_path: backup_path.to_path_buf(),
-                size_bytes: self.calculate_size(backup_path)?,
-                version: "unknown".to_string(),
-            });
-        }
-
-        let json = std::fs::read_to_string(metadata_path)?;
-        let metadata: BackupMetadata = serde_json::from_str(&json)?;
-        Ok(metadata)
-    }
-
-    fn calculate_size(&self, path: &Path) -> Result<u64> {
-        let mut total = 0u64;
-
-        for entry in std::fs::read_dir(path)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.is_file() {
-                total += entry.metadata()?.len();
+                info!("Deleted old backup: {}", backup.id);
             }
         }
 
-        Ok(total)
+        Ok(deleted_count)
     }
-}
 
-impl Clone for BackupManager {
-    fn clone(&self) -> Self {
-        Self {
-            store_path: self.store_path.clone(),
-            backup_dir: self.backup_dir.clone(),
-            max_backups: self.max_backups,
-            compression_enabled: self.compression_enabled,
+    /// Delete a specific backup
+    pub async fn delete_backup(&self, backup_id: &str) -> Result<bool> {
+        let metadata = self.load_metadata(backup_id)?;
+
+        // Delete backup file
+        if metadata.file_path.exists() {
+            fs::remove_file(&metadata.file_path)
+                .context("Failed to delete backup file")?;
         }
-    }
-}
 
-/// Backup information
-#[derive(Debug, Clone)]
-pub struct BackupInfo {
-    pub path: PathBuf,
-    pub metadata: BackupMetadata,
-}
+        // Delete metadata file
+        let meta_path = self.get_metadata_path(backup_id);
+        if meta_path.exists() {
+            fs::remove_file(&meta_path)
+                .context("Failed to delete metadata file")?;
+        }
 
-/// Backup metadata
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct BackupMetadata {
-    pub backup_name: String,
-    pub created_at: DateTime<Utc>,
-    pub store_path: PathBuf,
-    pub backup_path: PathBuf,
-    pub size_bytes: u64,
-    pub version: String,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_metadata_serialization() {
-        let metadata = BackupMetadata {
-            backup_name: "test_backup".to_string(),
-            created_at: Utc::now(),
-            store_path: PathBuf::from("/tmp/store"),
-            backup_path: PathBuf::from("/tmp/backup"),
-            size_bytes: 1024,
-            version: "1.0.0".to_string(),
-        };
-
-        let json = serde_json::to_string(&metadata).unwrap();
-        assert!(json.contains("test_backup"));
-
-        let decoded: BackupMetadata = serde_json::from_str(&json).unwrap();
-        assert_eq!(decoded.backup_name, "test_backup");
+        info!("Deleted backup: {}", backup_id);
+        Ok(true)
     }
 }

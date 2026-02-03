@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dmpool::health::{HealthChecker, HealthStatus, ComponentStatus};
+use dmpool::health::{HealthChecker, HealthStatus, ComponentStatus, BitcoinNodeStatus, StratumStatus, BlockchainInfo, NetworkInfo};
 use p2poolv2_lib::config::Config;
 use std::env;
 use axum::{Json, Router, routing::get};
@@ -15,7 +15,7 @@ async fn main() -> Result<()> {
 
     let health_checker = HealthChecker::new(config.clone());
 
-    let port = env::var("HEALTH_PORT").unwrap_or_else(|_| "8080".to_string());
+    let port = env::var("HEALTH_PORT").unwrap_or_else(|_| "8081".to_string());
     let addr = format!("0.0.0.0:{}", port);
 
     let app = Router::new()
@@ -34,11 +34,39 @@ async fn health_handler() -> Json<HealthStatus> {
     Json(HealthStatus {
         status: "healthy".to_string(),
         database: ComponentStatus::healthy(),
-        bitcoin_rpc: ComponentStatus::healthy(),
-        zmq: ComponentStatus::healthy(),
+        bitcoin_node: BitcoinNodeStatus {
+            status: "unknown".to_string(),
+            rpc_latency_ms: None,
+            blockchain: BlockchainInfo {
+                blocks: 0,
+                headers: 0,
+                initial_block_download: false,
+                verification_progress: 0.0,
+                block_time_seconds: None,
+                best_block_hash: "".to_string(),
+            },
+            network: NetworkInfo {
+                connections: 0,
+                network_active: false,
+                peer_count: 0,
+            },
+            sync_progress: 0.0,
+            message: "Not initialized".to_string(),
+        },
+        stratum: StratumStatus {
+            status: "unknown".to_string(),
+            listening: false,
+            active_connections: 0,
+            shares_per_second: 0.0,
+            current_difficulty: 0.0,
+            message: "Not initialized".to_string(),
+        },
+        zmq: ComponentStatus {
+            status: "unknown".to_string(),
+            message: "Not initialized".to_string(),
+            latency_ms: None,
+        },
         uptime_seconds: 0,
-        active_connections: 0,
-        last_block_height: None,
         memory_mb: None,
     })
 }

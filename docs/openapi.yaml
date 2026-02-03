@@ -1,0 +1,945 @@
+openapi: 3.0.3
+info:
+  title: DMPool Admin API
+  description: |
+    Admin API for DMPool - an open source PPLNS Bitcoin mining pool.
+    
+    ## Authentication
+    
+    Most endpoints require JWT authentication. Obtain a token by logging in via `/api/auth/login`.
+    
+    Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <your_jwt_token>
+    ```
+    
+    ## Rate Limiting
+    
+    - API endpoints: 60 requests per minute
+    - Login endpoint: 10 requests per minute
+    
+    Rate limit headers are included in responses:
+    - `X-RateLimit-Limit`: Request limit per window
+    - `X-RateLimit-Remaining`: Remaining requests
+    - `X-RateLimit-Reset`: Unix timestamp when limit resets
+  version: 2.4.0
+  contact:
+    name: DMPool
+    url: https://dmpool.org
+    license:
+      name: AGPLv3
+      url: https://github.com/kxx2026/dmpool
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://admin.dmpool.org
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication and token management
+  - name: Dashboard
+    description: Pool metrics and dashboard data
+  - name: Configuration
+    description: Pool configuration management
+  - name: Workers
+    description: Worker/miner management
+  - name: Blocks
+    description: Block information
+  - name: Audit
+    description: Audit logging and security
+  - name: Backup
+    description: Database backup and restore
+  - name: Alerts
+    description: Alert management
+  - name: Health
+    description: Health check endpoints
+
+paths:
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login to admin panel
+      description: Authenticate with username and password to receive JWT token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  format: password
+                  example: admin123
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+                            example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                          user:
+                            $ref: '#/components/schemas/UserInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Get dashboard metrics
+      description: Retrieve current pool statistics and metrics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Dashboard data retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DashboardMetrics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/config:
+    get:
+      tags: [Configuration]
+      summary: Get current configuration
+      description: Retrieve the current pool configuration
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Configuration retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ConfigView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Configuration]
+      summary: Update configuration
+      description: Update pool configuration parameters (with confirmation for dangerous changes)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigUpdate'
+      responses:
+        '200':
+          description: Configuration updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/config/confirmations:
+    get:
+      tags: [Configuration]
+      summary: Get pending configuration changes
+      description: List all pending configuration changes awaiting confirmation
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Pending changes retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ConfigChangeRequest'
+
+  /api/config/confirmations/{id}:
+    post:
+      tags: [Configuration]
+      summary: Confirm configuration change
+      description: Confirm a pending configuration change by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConfirmationId'
+      responses:
+        '200':
+          description: Change confirmed successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/config/confirmations/{id}/apply:
+    post:
+      tags: [Configuration]
+      summary: Apply confirmed configuration change
+      description: Apply a previously confirmed configuration change
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConfirmationId'
+      responses:
+        '200':
+          description: Change applied successfully
+        '400':
+          description: Change not yet confirmed
+
+  /api/workers:
+    get:
+      tags: [Workers]
+      summary: List workers
+      description: Get paginated list of workers with filtering and search
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/StatusFilter'
+        - $ref: '#/components/parameters/SortBy'
+        - $ref: '#/components/parameters/SortOrder'
+      responses:
+        '200':
+          description: Workers list retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PaginatedWorkers'
+
+  /api/workers/{address}:
+    get:
+      tags: [Workers]
+      summary: Get worker details
+      description: Retrieve detailed information about a specific worker
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkerAddress'
+      responses:
+        '200':
+          description: Worker details retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/WorkerDetail'
+
+  /api/workers/{address}/ban:
+    post:
+      tags: [Workers]
+      summary: Ban worker
+      description: Ban a worker from the pool
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkerAddress'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Worker banned successfully
+
+  /api/workers/{address}/unban:
+    post:
+      tags: [Workers]
+      summary: Unban worker
+      description: Remove ban from a worker
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkerAddress'
+      responses:
+        '200':
+          description: Worker unbanned successfully
+
+  /api/workers/{address}/tags:
+    post:
+      tags: [Workers]
+      summary: Add tag to worker
+      description: Add a tag to a worker for organization
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkerAddress'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tag]
+              properties:
+                tag:
+                  type: string
+                  example: vip
+      responses:
+        '200':
+          description: Tag added successfully
+
+  /api/workers/{address}/tags/{tag}:
+    post:
+      tags: [Workers]
+      summary: Remove tag from worker
+      description: Remove a specific tag from a worker
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkerAddress'
+        - name: tag
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tag removed successfully
+
+  /api/blocks:
+    get:
+      tags: [Blocks]
+      summary: List blocks
+      description: Get list of blocks found by the pool
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Blocks list retrieved
+
+  /api/blocks/{height}:
+    get:
+      tags: [Blocks]
+      summary: Get block details
+      description: Get detailed information about a specific block
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: height
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Block details retrieved
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/audit/logs:
+    get:
+      tags: [Audit]
+      summary: Get audit logs
+      description: Retrieve audit log entries with filtering
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UsernameFilter'
+        - $ref: '#/components/parameters/ActionFilter'
+        - $ref: '#/components/parameters/StartTime'
+        - $ref: '#/components/parameters/EndTime'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Audit logs retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AuditLog'
+
+  /api/audit/stats:
+    get:
+      tags: [Audit]
+      summary: Get audit statistics
+      description: Retrieve audit log statistics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Audit statistics retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuditStats'
+
+  /api/backup/create:
+    post:
+      tags: [Backup]
+      summary: Create backup
+      description: Create a new database backup
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Backup created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          backup:
+                            $ref: '#/components/schemas/BackupMetadata'
+
+  /api/backup/list:
+    get:
+      tags: [Backup]
+      summary: List backups
+      description: Get list of all available backups
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Backups list retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          backups:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/BackupMetadata'
+                          count:
+                            type: integer
+
+  /api/backup/stats:
+    get:
+      tags: [Backup]
+      summary: Get backup statistics
+      description: Retrieve backup statistics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Backup statistics retrieved
+
+  /api/backup/{id}:
+    get:
+      tags: [Backup]
+      summary: Get backup details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Backup details retrieved
+
+  /api/backup/{id}/delete:
+    post:
+      tags: [Backup]
+      summary: Delete backup
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Backup deleted successfully
+
+  /api/backup/{id}/restore:
+    post:
+      tags: [Backup]
+      summary: Restore from backup
+      description: Restore database from a backup (requires service restart)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Backup restored successfully
+        '400':
+          description: Restore failed
+
+  /api/backup/cleanup:
+    post:
+      tags: [Backup]
+      summary: Cleanup old backups
+      description: Delete old backups based on retention policy
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Cleanup completed
+
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Basic health check endpoint
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+
+  /api/services/status:
+    get:
+      tags: [Health]
+      summary: Services status
+      description: Detailed status of all services
+      security: []
+      responses:
+        '200':
+          description: Services status retrieved
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ApiResponse:
+      type: object
+      required: [status, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+        data:
+          type: object
+        message:
+          type: string
+        timestamp:
+          type: integer
+          format: uint64
+          example: 1704067200
+
+    UserInfo:
+      type: object
+      properties:
+        username:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+
+    DashboardMetrics:
+      type: object
+      properties:
+        pool_hashrate_ths:
+          type: number
+          format: float
+        active_workers:
+          type: integer
+          format: uint64
+        total_shares:
+          type: integer
+          format: uint64
+        blocks_found:
+          type: integer
+          format: uint64
+        uptime_seconds:
+          type: integer
+          format: uint64
+        pplns_window_shares:
+          type: integer
+          format: uint64
+        current_difficulty:
+          type: number
+          format: float
+
+    ConfigView:
+      type: object
+      properties:
+        stratum_port:
+          type: integer
+        stratum_hostname:
+          type: string
+        start_difficulty:
+          type: integer
+        minimum_difficulty:
+          type: integer
+        pplns_ttl_days:
+          type: integer
+        difficulty_multiplier:
+          type: number
+
+    ConfigUpdate:
+      type: object
+      properties:
+        start_difficulty:
+          type: integer
+          minimum: 8
+          maximum: 512
+        minimum_difficulty:
+          type: integer
+          minimum: 8
+          maximum: 512
+        pool_signature:
+          type: string
+          maxLength: 16
+
+    ConfigChangeRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        parameter:
+          type: string
+        old_value:
+          type: object
+        new_value:
+          type: object
+        username:
+          type: string
+        ip_address:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        confirmed:
+          type: boolean
+        applied:
+          type: boolean
+
+    PaginatedWorkers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkerInfo'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total_pages:
+          type: integer
+
+    WorkerInfo:
+      type: object
+      properties:
+        address:
+          type: string
+        worker_name:
+          type: string
+        hashrate_ths:
+          type: number
+        shares_count:
+          type: integer
+        difficulty:
+          type: integer
+        last_seen:
+          type: string
+          format: date-time
+        first_seen:
+          type: string
+          format: date-time
+        is_banned:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [active, inactive, banned]
+
+    WorkerDetail:
+      type: object
+      properties:
+        address:
+          type: string
+        shares_history:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: integer
+              difficulty:
+                type: integer
+        payments:
+          type: array
+          items:
+            type: object
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        username:
+          type: string
+        action:
+          type: string
+        resource:
+          type: string
+        ip_address:
+          type: string
+        details:
+          type: object
+        success:
+          type: boolean
+        error:
+          type: string
+
+    AuditStats:
+      type: object
+      properties:
+        total_logs:
+          type: integer
+        success_count:
+          type: integer
+        failure_count:
+          type: integer
+        top_actions:
+          type: array
+          items:
+            type: array
+            items:
+              oneOf:
+                - type: string
+                - type: integer
+
+    BackupMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        file_path:
+          type: string
+        original_size:
+          type: integer
+        backup_size:
+          type: integer
+        compression_ratio:
+          type: number
+        validated:
+          type: boolean
+        schema_version:
+          type: integer
+        checksum:
+          type: string
+
+    Error:
+      type: object
+      required: [status, message]
+      properties:
+        status:
+          type: string
+          enum: [error]
+        message:
+          type: string
+        timestamp:
+          type: integer
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Search:
+      name: search
+      in: query
+      schema:
+        type: string
+      description: Search by address or worker name
+    StatusFilter:
+      name: status
+      in: query
+      schema:
+        type: string
+        enum: [active, inactive, banned]
+      description: Filter by worker status
+    SortBy:
+      name: sort_by
+      in: query
+      schema:
+        type: string
+        enum: [address, hashrate, shares, last_seen]
+        default: last_seen
+    SortOrder:
+      name: sort_order
+      in: query
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+    WorkerAddress:
+      name: address
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Bitcoin address or user ID
+    ConfirmationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    UsernameFilter:
+      name: username
+      in: query
+      schema:
+        type: string
+    ActionFilter:
+      name: action
+      in: query
+      schema:
+        type: string
+    StartTime:
+      name: start_time
+      in: query
+      schema:
+        type: integer
+      description: Unix timestamp
+    EndTime:
+      name: end_time
+      in: query
+      schema:
+        type: integer
+      description: Unix timestamp
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+      default: 100
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized - invalid or missing token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Too many requests
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
