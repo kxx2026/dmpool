@@ -14,7 +14,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{warn, debug, error};
+use tracing::{warn, debug, error, info};
 
 /// Rate limiter configuration
 #[derive(Clone)]
@@ -331,14 +331,14 @@ pub async fn rate_limit_middleware(
     req: Request,
     next: Next,
 ) -> Result<Response, RateLimitError> {
-    debug!("Rate limit middleware: processing request");
+    info!("MIDDLEWARE: Rate limit middleware: processing request");
     // Extract client IP with config
     let ip = extract_client_ip(req.headers(), &limiter.config)?;
-    debug!("Rate limit middleware: IP extracted as {}", ip);
+    info!("MIDDLEWARE: Rate limit middleware: IP extracted as {}", ip);
 
     // Check rate limit
     limiter.check_api_rate_limit(ip).await?;
-    debug!("Rate limit middleware: rate limit check passed");
+    info!("MIDDLEWARE: Rate limit middleware: rate limit check passed");
 
     // Continue with request
     Ok(next.run(req).await)
@@ -350,17 +350,17 @@ pub async fn login_rate_limit_middleware(
     req: Request,
     next: Next,
 ) -> Result<Response, RateLimitError> {
-    debug!("Login rate limit middleware: processing request");
+    info!("MIDDLEWARE: Login rate limit middleware: processing request");
     // Extract client IP with config
     let ip = extract_client_ip(req.headers(), &limiter.config)?;
-    debug!("Login rate limit middleware: IP extracted as {}", ip);
+    info!("MIDDLEWARE: Login rate limit middleware: IP extracted as {}", ip);
 
     // Check rate limit (stricter for login)
     limiter.check_login_rate_limit(ip).await?;
-    debug!("Login rate limit middleware: rate limit check passed");
+    info!("MIDDLEWARE: Login rate limit middleware: rate limit check passed");
 
     // Continue with request
-    debug!("Login rate limit middleware: calling next handler");
+    info!("MIDDLEWARE: Login rate limit middleware: calling next handler");
     Ok(next.run(req).await)
 }
 

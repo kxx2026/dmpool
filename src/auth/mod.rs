@@ -201,8 +201,9 @@ impl AuthManager {
 
     /// Authenticate user
     pub async fn authenticate(&self, username: &str, password: &str) -> Result<Option<User>> {
-        debug!("Authentication attempt for user: {}", username);
+        info!("AUTH: Authentication attempt for user: {}", username);
         let users = self.users.read().await;
+        info!("AUTH: Got users lock, finding user");
 
         if let Some(user) = users.iter().find(|u| u.username == username) {
             // Clone user data to avoid holding borrow across await
@@ -210,19 +211,19 @@ impl AuthManager {
             let password_hash = user.password_hash.clone();
             drop(users); // Release read lock before blocking operation
 
-            debug!("Starting password verification for user: {}", username);
+            info!("AUTH: User found, starting password verification");
             // Use spawn_blocking to avoid blocking the tokio executor
             let password = password.to_string();
             let is_valid = tokio::task::spawn_blocking(move || {
-                debug!("bcrypt verification started");
+                info!("AUTH: bcrypt verification started");
                 let result = bcrypt::verify(&password, &password_hash).unwrap_or(false);
-                debug!("bcrypt verification completed: {}", result);
+                info!("AUTH: bcrypt verification completed: {}", result);
                 result
             })
             .await
             .map_err(|e| anyhow::anyhow!("Join error: {}", e))?;
 
-            debug!("Password verification result for user {}: {}", username, is_valid);
+            info!("AUTH: Password verification result for user {}: {}", username, is_valid);
             if is_valid {
                 // Update last login
                 let mut users = self.users.write().await;
@@ -233,7 +234,7 @@ impl AuthManager {
             }
         }
 
-        warn!("Authentication failed for user: {}", username);
+        warn!("AUTH: Authentication failed for user: {}", username);
         Ok(None)
     }
 
