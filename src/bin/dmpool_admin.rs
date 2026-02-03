@@ -237,6 +237,7 @@ async fn main() -> Result<()> {
 
     // Initialize auth manager
     let auth_manager = Arc::new(AuthManager::new(jwt_secret));
+    auth_manager.load().await?;  // Load existing users from disk
     auth_manager.init_default_admin(&admin_username, &admin_password).await?;
     info!("Initialized admin user: {}", admin_username);
 
@@ -347,9 +348,9 @@ async fn main() -> Result<()> {
         .with_state(state)
         .fallback(not_found);
 
-    // Start server - bind to localhost only for security
-    // Access via Tailscale (100.117.220.21:8080) or SSH tunnel
-    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
+    // Start server - bind to all interfaces
+    // Firewall rules restrict access to trusted networks (LAN + Tailscale)
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
     info!("DMPool Admin Server listening on port {}", port);
     info!("Access admin panel at http://localhost:{}", port);
     info!("Default credentials: {} / {}", admin_username, "***");

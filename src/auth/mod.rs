@@ -10,6 +10,8 @@ use axum::{
 use chrono::{Duration, Utc};
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
@@ -149,14 +151,66 @@ pub struct UserInfo {
 pub struct AuthManager {
     secret: String,
     users: Arc<RwLock<Vec<User>>>,
+    users_file: PathBuf,
 }
 
 impl AuthManager {
     pub fn new(secret: String) -> Self {
+        let data_dir = std::env::var("DMP_DATA_DIR").unwrap_or_else(|_| "./data".to_string());
+        let users_file = PathBuf::from(data_dir).join("users.json");
         Self {
             secret,
             users: Arc::new(RwLock::new(Vec::new())),
+            users_file,
         }
+    }
+
+    /// Load users from file
+    fn load_users(&self) -> Vec<User> {
+        if self.users_file.exists() {
+            match fs::read_to_string(&self.users_file) {
+                Ok(content) => {
+                    match serde_json::from_str::<Vec<User>>(&content) {
+                        Ok(users) => {
+                            info!("Loaded {} user(s) from {}", users.len(), self.users_file.display());
+                            return users;
+                        }
+                        Err(e) => {
+                            warn!("Failed to parse users file: {}, starting with empty user list", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to read users file: {}, starting with empty user list", e);
+                }
+            }
+        }
+        Vec::new()
+    }
+
+    /// Save users to file
+    fn save_users(&self, users: &[User]) -> Result<()> {
+        // Ensure directory exists
+        if let Some(parent) = self.users_file.parent() {
+            fs::create_dir_all(parent)
+                .context("Failed to create users directory")?;
+        }
+
+        let json = serde_json::to_string_pretty(users)
+            .context("Failed to serialize users")?;
+
+        fs::write(&self.users_file, json)
+            .context("Failed to write users file")?;
+
+        info!("Saved {} user(s) to {}", users.len(), self.users_file.display());
+        Ok(())
+    }
+
+    /// Initialize users from persistent storage
+    pub async fn load(&self) -> Result<()> {
+        let users = self.load_users();
+        *self.users.write().await = users;
+        Ok(())
     }
 
     /// Initialize with default admin user
@@ -196,6 +250,13 @@ impl AuthManager {
 
         users.push(user);
         info!("Created default admin user '{}'", username);
+
+        // Save to file
+        let users_slice = users.as_slice();
+        if let Err(e) = self.save_users(users_slice) {
+            warn!("Failed to save users to file: {}", e);
+        }
+
         Ok(())
     }
 
@@ -229,6 +290,11 @@ impl AuthManager {
                 let mut users = self.users.write().await;
                 if let Some(u) = users.iter_mut().find(|u| u.username == username) {
                     u.last_login = Some(Utc::now().timestamp());
+                }
+                // Save to file (async but fire and forget)
+                let users_slice = users.as_slice();
+                if let Err(e) = self.save_users(users_slice) {
+                    warn!("Failed to save users to file: {}", e);
                 }
                 return Ok(Some(user_clone));
             }
@@ -300,6 +366,13 @@ impl AuthManager {
         let mut users = self.users.write().await;
         users.push(user);
         info!("Created user '{}' with role '{}'", username, role);
+
+        // Save to file
+        let users_slice = users.as_slice();
+        if let Err(e) = self.save_users(users_slice) {
+            warn!("Failed to save users to file: {}", e);
+        }
+
         Ok(())
     }
 
