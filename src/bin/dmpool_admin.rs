@@ -910,8 +910,10 @@ async fn login(
     State(state): State<AdminState>,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
+    info!("Login request received for user: {}", req.username);
     match state.auth_manager.authenticate(&req.username, &req.password).await {
         Ok(Some(user)) => {
+            info!("Authentication successful for user: {}, generating token", req.username);
             let token = state.auth_manager.generate_token(&user)
                 .map_err(|e| {
                     error!("Failed to generate token: {}", e);

@@ -177,9 +177,14 @@ impl AuthManager {
             return Ok(());
         }
 
-        // Hash password
-        let password_hash = bcrypt::hash(password, bcrypt::DEFAULT_COST)
-            .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))?;
+        // Hash password using spawn_blocking to avoid blocking the tokio executor
+        let password = password.to_string();
+        let password_hash = tokio::task::spawn_blocking(move || {
+            bcrypt::hash(&password, bcrypt::DEFAULT_COST)
+                .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Join error: {}", e))??;
 
         let user = User {
             username: username.to_string(),
@@ -196,22 +201,39 @@ impl AuthManager {
 
     /// Authenticate user
     pub async fn authenticate(&self, username: &str, password: &str) -> Result<Option<User>> {
+        debug!("Authentication attempt for user: {}", username);
         let users = self.users.read().await;
 
         if let Some(user) = users.iter().find(|u| u.username == username) {
-            let is_valid = bcrypt::verify(password, &user.password_hash)
-                .unwrap_or(false);
+            // Clone user data to avoid holding borrow across await
+            let user_clone = user.clone();
+            let password_hash = user.password_hash.clone();
+            drop(users); // Release read lock before blocking operation
 
+            debug!("Starting password verification for user: {}", username);
+            // Use spawn_blocking to avoid blocking the tokio executor
+            let password = password.to_string();
+            let is_valid = tokio::task::spawn_blocking(move || {
+                debug!("bcrypt verification started");
+                let result = bcrypt::verify(&password, &password_hash).unwrap_or(false);
+                debug!("bcrypt verification completed: {}", result);
+                result
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Join error: {}", e))?;
+
+            debug!("Password verification result for user {}: {}", username, is_valid);
             if is_valid {
                 // Update last login
                 let mut users = self.users.write().await;
                 if let Some(u) = users.iter_mut().find(|u| u.username == username) {
                     u.last_login = Some(Utc::now().timestamp());
                 }
-                return Ok(Some(user.clone()));
+                return Ok(Some(user_clone));
             }
         }
 
+        warn!("Authentication failed for user: {}", username);
         Ok(None)
     }
 
@@ -257,8 +279,14 @@ impl AuthManager {
             return Err(anyhow::anyhow!(error_msg)).context("Invalid password");
         }
 
-        let password_hash = bcrypt::hash(password, bcrypt::DEFAULT_COST)
-            .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))?;
+        // Use spawn_blocking to avoid blocking the tokio executor
+        let password = password.to_string();
+        let password_hash = tokio::task::spawn_blocking(move || {
+            bcrypt::hash(&password, bcrypt::DEFAULT_COST)
+                .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Join error: {}", e))??;
 
         let user = User {
             username: username.to_string(),
